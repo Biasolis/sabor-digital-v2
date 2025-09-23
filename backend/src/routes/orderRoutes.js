@@ -3,7 +3,8 @@ import {
   createOrder, 
   addOrderItem,
   getOrderDetails,
-  updateOrderStatus
+  updateOrderStatus,
+  listOrders // Nova importação
 } from '../controllers/orderController.js';
 import { 
   protect, 
@@ -16,6 +17,9 @@ const router = Router();
 
 // Todas as rotas aqui requerem que o usuário esteja logado e pertença a um tenant
 router.use(protect, isTenantUser);
+
+// Rota para listar todas as comandas (usada pela cozinha)
+router.get('/', listOrders);
 
 // Rotas para equipe operacional (Garçom, Caixa, Admin)
 router.post('/', isOperationalUser, createOrder);

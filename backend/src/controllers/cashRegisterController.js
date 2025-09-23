@@ -22,14 +22,30 @@ export const createCashRegister = async (req, res) => {
   }
 };
 
-// Listar caixas
+// MODIFICADO: Listar caixas com o status da sessão atual
 export const listCashRegisters = async (req, res) => {
   const { tenant_id } = req.user;
   try {
-    const query = 'SELECT * FROM cash_registers WHERE tenant_id = $1 ORDER BY name;';
+    const query = `
+      SELECT 
+        cr.id, 
+        cr.name, 
+        cr.is_active,
+        cs.id as open_session_id,
+        CASE WHEN cs.id IS NOT NULL THEN 'open' ELSE 'closed' END as session_status
+      FROM 
+        cash_registers cr
+      LEFT JOIN 
+        cash_sessions cs ON cr.id = cs.cash_register_id AND cs.status = 'open'
+      WHERE 
+        cr.tenant_id = $1 
+      ORDER BY 
+        cr.name;
+    `;
     const result = await db.query(query, [tenant_id]);
     res.status(200).json(result.rows);
-  } catch (error) {
+  } catch (error)
+ {
     console.error('Erro ao listar caixas:', error);
     res.status(500).json({ message: 'Erro interno do servidor.' });
   }

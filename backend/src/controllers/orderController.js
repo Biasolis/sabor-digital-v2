@@ -1,9 +1,39 @@
 import db from '../database/db.js';
-import { sendMessage as sendTicketzMessage } from '../services/ticketzService.js'; // Nova importação
+import { sendMessage as sendTicketzMessage } from '../services/ticketzService.js';
+
+// NOVA FUNÇÃO: Listar todas as comandas de um tenant
+export const listOrders = async (req, res) => {
+  const { tenant_id } = req.user;
+  const { status } = req.query; // Filtro opcional por status
+
+  try {
+    let query = `
+      SELECT o.id, o.status, o.total_amount, t.number as table_number
+      FROM orders o
+      LEFT JOIN tables t ON o.table_id = t.id
+      WHERE o.tenant_id = $1
+    `;
+    const params = [tenant_id];
+
+    if (status) {
+      query += ` AND o.status = $2`;
+      params.push(status);
+    }
+    
+    query += ` ORDER BY o.created_at ASC;`;
+
+    const result = await db.query(query, params);
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error('Erro ao listar comandas:', error);
+    res.status(500).json({ message: 'Erro interno do servidor.' });
+  }
+};
+
 
 // Abrir uma nova comanda para uma mesa
 export const createOrder = async (req, res) => {
-  const { table_id, customer_id } = req.body; // Adicionamos customer_id aqui
+  const { table_id, customer_id } = req.body;
   const { tenant_id, id: user_id } = req.user;
 
   if (!table_id) {
@@ -213,8 +243,6 @@ export const updateOrderStatus = async (req, res) => {
     `;
     const result = await client.query(query, [status, orderId, tenant_id]);
     
-    // --- LÓGICA DE NOTIFICAÇÃO TICKETZ ---
-    // Dispara a notificação APÓS a transação ser confirmada com sucesso
     if (customer_id) {
         const customer = await client.query('SELECT phone, name FROM customers WHERE id = $1', [customer_id]);
         if (customer.rowCount > 0) {
@@ -232,8 +260,6 @@ export const updateOrderStatus = async (req, res) => {
                     break;
             }
             if (messageBody) {
-                // Usamos a função do service, mas não esperamos ela terminar (não usamos await)
-                // para não bloquear a resposta da API.
                 sendTicketzMessage(phone, messageBody);
             }
         }

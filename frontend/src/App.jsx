@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter } from 'react-router-dom'; // 1. Importar BrowserRouter
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -12,10 +12,10 @@ import AppRoutes from './routes';
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter> {/* 2. Mover o BrowserRouter para envolver tudo */}
       <AuthProvider>
         <ThemeProvider theme={theme}>
-          <CssBaseline /> {/* Reseta o CSS padrão do navegador */}
+          <CssBaseline />
           <AppRoutes />
           <ToastContainer
             position="top-right"

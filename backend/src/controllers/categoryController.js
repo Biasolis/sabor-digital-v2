@@ -29,7 +29,7 @@ export const createCategory = async (req, res) => {
 
 // Listar todas as categorias do tenant
 export const listCategories = async (req, res) => {
-  const tenantId = req.user.tenant_id;
+  const tenantId = req.tenant.id; // MODIFICADO: Vem do middleware resolveTenant
 
   try {
     const query = `

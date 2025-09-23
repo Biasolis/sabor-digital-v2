@@ -35,7 +35,7 @@ export const createProduct = async (req, res) => {
 
 // Listar produtos, com filtro opcional por categoria
 export const listProducts = async (req, res) => {
-  const tenantId = req.user.tenant_id;
+  const tenantId = req.tenant.id; // MODIFICADO: Vem do middleware resolveTenant
   const { category_id } = req.query; // Pega o category_id da URL (ex: ?category_id=...)
 
   try {

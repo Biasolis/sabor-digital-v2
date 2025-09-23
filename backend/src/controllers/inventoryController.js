@@ -66,3 +66,25 @@ export const updateInventoryItem = async (req, res) => {
     res.status(500).json({ message: 'Erro interno do servidor.' });
   }
 };
+
+// NOVA FUNÇÃO: Deletar um item de estoque
+export const deleteInventoryItem = async (req, res) => {
+  const { id } = req.params;
+  const { tenant_id } = req.user;
+
+  try {
+    // Atenção: No futuro, adicionar verificação para impedir a exclusão de itens
+    // que estão sendo usados em receitas de produtos.
+    const query = 'DELETE FROM inventory_items WHERE id = $1 AND tenant_id = $2;';
+    const result = await db.query(query, [id, tenant_id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Item de estoque não encontrado.' });
+    }
+
+    res.status(204).send(); // Resposta de sucesso sem conteúdo
+  } catch (error) {
+    console.error('Erro ao deletar item de estoque:', error);
+    res.status(500).json({ message: 'Erro interno do servidor.' });
+  }
+};

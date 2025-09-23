@@ -1,8 +1,6 @@
 import React from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-
-// Importando componentes e ícones do Material-UI
 import {
   Box,
   Drawer,
@@ -15,15 +13,19 @@ import {
   ListItemIcon,
   ListItemText,
   CssBaseline,
-  Divider
+  Divider,
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import PeopleIcon from '@mui/icons-material/People';
 import LogoutIcon from '@mui/icons-material/Logout';
+import TableRestaurantIcon from '@mui/icons-material/TableRestaurant';
+import SoupKitchenIcon from '@mui/icons-material/SoupKitchen';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import InventoryIcon from '@mui/icons-material/Inventory';
 
-const drawerWidth = 240; // Largura do menu lateral
+const drawerWidth = 240;
 
 const MainLayout = () => {
   const { user, logout } = useAuth();
@@ -32,9 +34,14 @@ const MainLayout = () => {
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-    { text: 'Cardápio', icon: <RestaurantMenuIcon />, path: '/menu' }, // Rota futura
-    { text: 'PDV', icon: <PointOfSaleIcon />, path: '/pdv' }, // Rota futura
-    { text: 'Usuários', icon: <PeopleIcon />, path: '/users' }, // Rota futura
+    { text: 'PDV', icon: <PointOfSaleIcon />, path: '/pdv' },
+    { text: 'Cozinha', icon: <SoupKitchenIcon />, path: '/kitchen' },
+    { text: 'Caixa', icon: <AttachMoneyIcon />, path: '/cashier' },
+    { isDivider: true }, // Divisor para separar as seções
+    { text: 'Cardápio', icon: <RestaurantMenuIcon />, path: '/admin/menu' },
+    { text: 'Estoque', icon: <InventoryIcon />, path: '/admin/inventory' },
+    { text: 'Mesas', icon: <TableRestaurantIcon />, path: '/admin/tables' },
+    { text: 'Usuários', icon: <PeopleIcon />, path: '/users' },
   ];
 
   const drawer = (
@@ -46,7 +53,8 @@ const MainLayout = () => {
       </Toolbar>
       <Divider />
       <List>
-        {menuItems.map((item) => (
+        {menuItems.map((item, index) => (
+          item.isDivider ? <Divider key={`divider-${index}`} sx={{ my: 1 }} /> :
           <ListItem key={item.text} disablePadding>
             <ListItemButton onClick={() => navigate(item.path)}>
               <ListItemIcon>
@@ -102,8 +110,8 @@ const MainLayout = () => {
         component="main"
         sx={{ flexGrow: 1, bgcolor: 'background.default', p: 3 }}
       >
-        <Toolbar /> {/* Espaçador para o conteúdo não ficar atrás da AppBar */}
-        <Outlet /> {/* Aqui é onde as páginas (Dashboard, etc.) serão renderizadas */}
+        <Toolbar />
+        <Outlet />
       </Box>
     </Box>
   );
