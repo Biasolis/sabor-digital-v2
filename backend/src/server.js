@@ -16,7 +16,9 @@ import cashSessionRoutes from './routes/cashSessionRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import planRoutes from './routes/planRoutes.js';
 import superAdminDashboardRoutes from './routes/superAdminDashboardRoutes.js';
-import reportRoutes from './routes/reportRoutes.js'; // Nova importação
+import reportRoutes from './routes/reportRoutes.js';
+import customerRoutes from './routes/customerRoutes.js';
+import customerAuthRoutes from './routes/customerAuthRoutes.js'; // 1. Nova importação
 
 await testConnection();
 
@@ -38,7 +40,9 @@ app.use('/api/superadmin', superadminRoutes);
 app.use('/api/superadmin/dashboard', superAdminDashboardRoutes);
 app.use('/api/tenants', tenantRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/customer/auth', customerAuthRoutes); // 2. Nova rota para autenticação de clientes
 app.use('/api/users', userRoutes);
+app.use('/api/customers', customerRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/tables', tableRoutes);
@@ -48,7 +52,7 @@ app.use('/api/cash-registers', cashRegisterRoutes);
 app.use('/api/cash-sessions', cashSessionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/plans', planRoutes);
-app.use('/api/reports', reportRoutes); // Novo uso
+app.use('/api/reports', reportRoutes);
 
 const PORT = process.env.PORT || 3333;
 

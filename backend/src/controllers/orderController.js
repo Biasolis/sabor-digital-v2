@@ -1,10 +1,10 @@
 import db from '../database/db.js';
 import { sendMessage as sendTicketzMessage } from '../services/ticketzService.js';
 
-// Listar todas as comandas de um tenant
+// Listar todas as comandas de um tenant (Visão do funcionário)
 export const listOrders = async (req, res) => {
   const { tenant_id } = req.user;
-  const { status } = req.query; // Filtro opcional por status
+  const { status } = req.query;
 
   try {
     let query = `
@@ -30,6 +30,45 @@ export const listOrders = async (req, res) => {
   }
 };
 
+// Obter a comanda ativa de um cliente logado
+export const getMyActiveOrder = async (req, res) => {
+  const { id: customer_id, tenant_id } = req.customer;
+
+  try {
+    const orderQuery = `
+      SELECT o.id, o.status, o.total_amount, o.tip_amount, o.final_amount, o.created_at, t.number as table_number
+      FROM orders o
+      LEFT JOIN tables t ON o.table_id = t.id
+      WHERE o.customer_id = $1 AND o.tenant_id = $2 AND o.status NOT IN ('paid', 'canceled')
+      ORDER BY o.created_at DESC LIMIT 1;
+    `;
+    const orderResult = await db.query(orderQuery, [customer_id, tenant_id]);
+
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Nenhuma comanda ativa encontrada.' });
+    }
+    
+    const order = orderResult.rows[0];
+
+    const itemsQuery = `
+      SELECT i.id, i.quantity, i.unit_price, i.observation, p.name as product_name
+      FROM order_items i
+      JOIN products p ON i.product_id = p.id
+      WHERE i.order_id = $1;
+    `;
+    const itemsResult = await db.query(itemsQuery, [order.id]);
+
+    const response = {
+      ...order,
+      items: itemsResult.rows,
+    };
+
+    res.status(200).json(response);
+  } catch (error) {
+    console.error('Erro ao buscar comanda do cliente:', error);
+    res.status(500).json({ message: 'Erro interno do servidor.' });
+  }
+};
 
 // Abrir uma nova comanda para uma mesa
 export const createOrder = async (req, res) => {
@@ -126,14 +165,14 @@ export const addOrderItem = async (req, res) => {
   }
 };
 
-// Obter os detalhes completos de uma comanda
+// Obter os detalhes completos de uma comanda (Visão do funcionário)
 export const getOrderDetails = async (req, res) => {
   const { orderId } = req.params;
   const { tenant_id } = req.user;
 
   try {
     const orderQuery = `
-      SELECT o.id, o.status, o.total_amount, o.tip_amount, o.final_amount, o.created_at, t.number as table_number
+      SELECT o.id, o.status, o.total_amount, o.tip_amount, o.final_amount, o.created_at, o.customer_id, t.number as table_number
       FROM orders o
       LEFT JOIN tables t ON o.table_id = t.id
       WHERE o.id = $1 AND o.tenant_id = $2;
@@ -164,7 +203,7 @@ export const getOrderDetails = async (req, res) => {
   }
 };
 
-// Atualizar status da comanda (inclui pagamento e gorjeta)
+// Atualizar status da comanda
 export const updateOrderStatus = async (req, res) => {
   const { orderId } = req.params;
   const { status, payment_method, tip_amount } = req.body;
@@ -235,7 +274,7 @@ export const updateOrderStatus = async (req, res) => {
     const result = await client.query(query, [status, orderId, tenant_id]);
     
     if (customer_id) {
-        const customer = await client.query('SELECT phone, name FROM customers WHERE id = $1', [customer_id]);
+        const customer = await client.query('SELECT phone, first_name as name FROM customers WHERE id = $1', [customer_id]);
         if (customer.rowCount > 0) {
             const { phone, name } = customer.rows[0];
             let messageBody = '';
@@ -245,7 +284,7 @@ export const updateOrderStatus = async (req, res) => {
                 case 'delivered': messageBody = `Seu pedido #${orderId.substring(0, 5)} foi entregue. Bom apetite!`; break;
             }
             if (messageBody) {
-                sendTicketzMessage(phone, messageBody);
+                await sendTicketzMessage(phone, messageBody);
             }
         }
     }
@@ -260,6 +299,37 @@ export const updateOrderStatus = async (req, res) => {
     client.release();
   }
 };
+
+// NOVA FUNÇÃO: Vincular um cliente a uma comanda
+export const linkCustomerToOrder = async (req, res) => {
+  const { orderId } = req.params;
+  const { customer_id } = req.body;
+  const { tenant_id } = req.user;
+
+  if (!customer_id) {
+    return res.status(400).json({ message: 'O ID do cliente é obrigatório.' });
+  }
+
+  try {
+    const query = `
+      UPDATE orders 
+      SET customer_id = $1 
+      WHERE id = $2 AND tenant_id = $3
+      RETURNING id, customer_id;
+    `;
+    const result = await db.query(query, [customer_id, orderId, tenant_id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Comanda não encontrada.' });
+    }
+
+    res.status(200).json(result.rows[0]);
+  } catch (error) {
+    console.error('Erro ao vincular cliente à comanda:', error);
+    res.status(500).json({ message: 'Erro interno do servidor.' });
+  }
+};
+
 
 // Remover um item de uma comanda
 export const removeOrderItem = async (req, res) => {

@@ -1,7 +1,6 @@
 import jwt from 'jsonwebtoken';
 import 'dotenv/config';
 
-// ... (middlewares protect, isSuperAdmin, isTenantUser, isTenantAdmin, isOperationalUser continuam aqui) ...
 export const protect = (req, res, next) => {
   let token;
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
@@ -53,8 +52,6 @@ export const isOperationalUser = (req, res, next) => {
   }
 };
 
-
-// NOVO: Middleware para permitir acesso à cozinha, caixa e admin
 export const isKitchenStaff = (req, res, next) => {
   const allowedRoles = ['admin', 'caixa', 'cozinha'];
   if (req.user && allowedRoles.includes(req.user.role)) {

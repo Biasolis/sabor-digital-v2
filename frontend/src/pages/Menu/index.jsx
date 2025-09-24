@@ -1,15 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box,
-  Typography,
-  Button,
-  Container,
-  Paper,
-  Grid,
-  CircularProgress,
-  Alert,
-  AppBar,
-  Toolbar,
+  Box, Typography, Button, Container, Paper, Grid,
+  CircularProgress, Alert, AppBar, Toolbar, Chip, ButtonGroup
 } from '@mui/material';
 import { toast } from 'react-toastify';
 import { Link } from 'react-router-dom';
@@ -29,8 +21,7 @@ const Menu = () => {
     setLoading(true);
     setError(null);
     try {
-      // Usamos a rota pública para buscar as informações do tenant através do header/subdomínio
-      const tenantResponse = await api.get('/tenants/public'); // Supondo que esta rota exista para dados públicos
+      const tenantResponse = await api.get('/tenants/public');
       const [categoriesResponse, productsResponse] = await Promise.all([
         api.get('/categories'),
         api.get('/products'),
@@ -41,23 +32,9 @@ const Menu = () => {
       setProducts(productsResponse.data);
 
     } catch (err) {
-      // Fallback para caso a rota pública do tenant não exista ainda
-      // (Buscando dados essenciais de forma separada)
-      try {
-        const [categoriesResponse, productsResponse] = await Promise.all([
-            api.get('/categories'),
-            api.get('/products'),
-        ]);
-        setCategories(categoriesResponse.data);
-        setProducts(productsResponse.data);
-        // Simulação dos dados do tenant
-        const subdomain = api.defaults.headers['X-Tenant-Subdomain'];
-        setTenantInfo({ name: `Cardápio de ${subdomain}`, is_open: true }); // Assume true se falhar
-      } catch (finalError) {
-        const errorMessage = finalError.response?.data?.message || 'Não foi possível carregar o cardápio.';
-        setError(errorMessage);
-        toast.error(errorMessage);
-      }
+      const errorMessage = err.response?.data?.message || 'Não foi possível carregar o cardápio.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -77,18 +54,27 @@ const Menu = () => {
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
         <AppBar position="static" color="default" elevation={1} sx={{ mb: 2 }}>
           <Toolbar>
-            <Typography variant="h5" component="div" sx={{ flexGrow: 1 }}>
+            <Typography variant="h5" component="div" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
               {tenantInfo.name}
+              {!loading && (
+                <Chip
+                  label={tenantInfo.is_open ? 'Aberto' : 'Fechado'}
+                  color={tenantInfo.is_open ? 'success' : 'error'}
+                  size="small"
+                />
+              )}
             </Typography>
-            <Button color="inherit" component={Link} to="/login">
-              Login
-            </Button>
+            {/* Botões para Cliente e Funcionário */}
+            <ButtonGroup variant="text" color="inherit">
+              <Button component={Link} to="/customer-login">Acompanhar Comanda</Button>
+              <Button component={Link} to="/login">Acesso Restrito</Button>
+            </ButtonGroup>
           </Toolbar>
         </AppBar>
         
-        {!tenantInfo.is_open && (
+        {!loading && !tenantInfo.is_open && (
             <Alert severity="warning" sx={{ mb: 2 }}>
-                No momento, estamos fechados e não estamos aceitando novos pedidos.
+                No momento, estamos fechados e não estamos aceitando novos pedidos. O cardápio está disponível apenas para visualização.
             </Alert>
         )}
 

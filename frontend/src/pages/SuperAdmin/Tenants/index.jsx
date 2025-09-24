@@ -5,14 +5,15 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete'; // 1. Importar ícone de lixeira
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import api from '../../../services/api';
 import TenantModal from '../components/TenantModal';
 
-const SuperAdminDashboard = () => {
+const TenantsPage = () => {
   const [tenants, setTenants] = useState([]);
-  const [plans, setPlans] = useState([]); // Novo estado para armazenar os planos
+  const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isModalOpen, setModalOpen] = useState(false);
@@ -21,7 +22,7 @@ const SuperAdminDashboard = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      // Busca tenants e planos em paralelo
+      setLoading(true);
       const [tenantsResponse, plansResponse] = await Promise.all([
         api.get('/tenants'),
         api.get('/plans')
@@ -55,11 +56,25 @@ const SuperAdminDashboard = () => {
         await api[method](endpoint, tenantData);
         toast.success(`Cliente ${isEditing ? 'atualizado' : 'criado'} com sucesso!`);
         setModalOpen(false);
-        fetchTenants();
+        fetchData();
     } catch (error) {
         toast.error(error.response?.data?.message || `Erro ao ${isEditing ? 'atualizar' : 'criar'} cliente.`);
     }
   };
+
+  // 2. NOVA FUNÇÃO para deletar um tenant
+  const handleDeleteTenant = async (tenantId) => {
+    if (window.confirm('Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.')) {
+      try {
+        await api.delete(`/tenants/${tenantId}`);
+        toast.success('Cliente excluído com sucesso!');
+        fetchData();
+      } catch (error) {
+        toast.error(error.response?.data?.message || 'Erro ao excluir cliente.');
+      }
+    }
+  };
+
 
   if (loading) return <Box sx={{display: 'flex', justifyContent: 'center', mt: 5}}><CircularProgress /></Box>;
 
@@ -86,6 +101,7 @@ const SuperAdminDashboard = () => {
               <TableRow>
                 <TableCell>Nome do Restaurante</TableCell>
                 <TableCell>Subdomínio</TableCell>
+                <TableCell>Plano</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Data de Criação</TableCell>
                 <TableCell align="center">Ações</TableCell>
@@ -96,12 +112,19 @@ const SuperAdminDashboard = () => {
                 <TableRow hover key={tenant.id}>
                   <TableCell>{tenant.name}</TableCell>
                   <TableCell>{tenant.subdomain}</TableCell>
+                  <TableCell>{plans.find(p => p.id === tenant.plan_id)?.name || 'N/A'}</TableCell>
                   <TableCell sx={{textTransform: 'capitalize'}}>{tenant.status}</TableCell>
                   <TableCell>{new Date(tenant.created_at).toLocaleDateString('pt-BR')}</TableCell>
                   <TableCell align="center">
                     <Tooltip title="Editar Cliente">
                       <IconButton onClick={() => handleOpenModal(tenant)}>
                         <EditIcon />
+                      </IconButton>
+                    </Tooltip>
+                    {/* 3. NOVO BOTÃO de exclusão */}
+                    <Tooltip title="Excluir Cliente">
+                      <IconButton onClick={() => handleDeleteTenant(tenant.id)}>
+                        <DeleteIcon color="error" />
                       </IconButton>
                     </Tooltip>
                   </TableCell>
@@ -122,10 +145,10 @@ const SuperAdminDashboard = () => {
         onClose={() => setModalOpen(false)}
         onSave={handleSaveTenant}
         tenant={editingTenant}
-        plans={plans} // Passa a lista de planos para o modal
+        plans={plans}
       />
     </Container>
   );
 };
 
-export default SuperAdminDashboard;
+export default TenantsPage;

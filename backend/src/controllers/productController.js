@@ -3,7 +3,8 @@ import { uploadFile } from '../lib/s3.js';
 
 // Criar um novo produto
 export const createProduct = async (req, res) => {
-  const { name, description, price, category_id } = req.body;
+  // Adicionado 'barcode'
+  const { name, description, price, category_id, barcode } = req.body;
   const tenantId = req.user.tenant_id;
 
   if (!name || !price || !category_id) {
@@ -11,7 +12,6 @@ export const createProduct = async (req, res) => {
   }
 
   try {
-    // Validação: Garante que a categoria pertence ao mesmo tenant
     const categoryCheck = await db.query(
       'SELECT id FROM categories WHERE id = $1 AND tenant_id = $2',
       [category_id, tenantId]
@@ -21,11 +21,12 @@ export const createProduct = async (req, res) => {
     }
 
     const query = `
-      INSERT INTO products (tenant_id, category_id, name, description, price)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO products (tenant_id, category_id, name, description, price, barcode)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *;
     `;
-    const result = await db.query(query, [tenantId, category_id, name, description, price]);
+    // Adicionado 'barcode' aos parâmetros
+    const result = await db.query(query, [tenantId, category_id, name, description, price, barcode]);
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Erro ao criar produto:', error);
@@ -33,14 +34,15 @@ export const createProduct = async (req, res) => {
   }
 };
 
-// Listar produtos, com filtro opcional por categoria
+// Listar produtos
 export const listProducts = async (req, res) => {
-  const tenantId = req.tenant.id; // MODIFICADO: Vem do middleware resolveTenant
-  const { category_id } = req.query; // Pega o category_id da URL (ex: ?category_id=...)
+  const tenantId = req.tenant.id;
+  const { category_id } = req.query;
 
   try {
+    // Adicionado p.barcode à seleção
     let queryText = `
-      SELECT p.id, p.name, p.description, p.price, p.is_available, p.image_url, c.name as category_name
+      SELECT p.id, p.name, p.description, p.price, p.is_available, p.image_url, p.barcode, c.name as category_name
       FROM products p
       JOIN categories c ON p.category_id = c.id
       WHERE p.tenant_id = $1
@@ -66,7 +68,8 @@ export const listProducts = async (req, res) => {
 export const updateProduct = async (req, res) => {
     const { id } = req.params;
     const tenantId = req.user.tenant_id;
-    const { name, description, price, category_id, is_available } = req.body;
+    // Adicionado 'barcode'
+    const { name, description, price, category_id, is_available, barcode } = req.body;
 
     if (!name || !price || !category_id) {
         return res.status(400).json({ message: 'Nome, preço e categoria são obrigatórios.' });
@@ -75,11 +78,12 @@ export const updateProduct = async (req, res) => {
     try {
         const query = `
             UPDATE products 
-            SET name = $1, description = $2, price = $3, category_id = $4, is_available = $5, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $6 AND tenant_id = $7
+            SET name = $1, description = $2, price = $3, category_id = $4, is_available = $5, barcode = $6, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $7 AND tenant_id = $8
             RETURNING *;
         `;
-        const result = await db.query(query, [name, description, price, category_id, is_available, id, tenantId]);
+        // Adicionado 'barcode' aos parâmetros
+        const result = await db.query(query, [name, description, price, category_id, is_available, barcode, id, tenantId]);
 
         if (result.rowCount === 0) {
             return res.status(404).json({ message: 'Produto não encontrado ou não pertence à sua loja.' });
@@ -133,7 +137,6 @@ export const uploadProductImage = async (req, res) => {
     const result = await db.query(query, [imageUrl, productId, tenantId]);
 
     if (result.rowCount === 0) {
-      // No futuro, podemos deletar a imagem do bucket caso o produto não seja encontrado
       return res.status(404).json({ message: 'Produto não encontrado ou não pertence à sua loja.' });
     }
 
@@ -147,7 +150,7 @@ export const uploadProductImage = async (req, res) => {
 // Define ou atualiza a "receita" de um produto
 export const defineProductRecipe = async (req, res) => {
   const { productId } = req.params;
-  const { recipeItems } = req.body; // Espera um array: [{ inventory_item_id, quantity_consumed }]
+  const { recipeItems } = req.body; 
   const { tenant_id } = req.user;
 
   if (!Array.isArray(recipeItems)) {
@@ -158,19 +161,16 @@ export const defineProductRecipe = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // 1. Apaga a receita antiga para substituir pela nova (abordagem mais simples)
     await client.query(
       'DELETE FROM product_inventory_usage WHERE product_id = $1',
       [productId]
     );
 
-    // 2. Insere os novos itens da receita
     for (const item of recipeItems) {
       const { inventory_item_id, quantity_consumed } = item;
       if (!inventory_item_id || !quantity_consumed) {
         throw new Error('Cada item da receita deve ter "inventory_item_id" e "quantity_consumed".');
       }
-      // Validação de segurança: Garante que o item de estoque pertence ao mesmo tenant
       const invItemCheck = await client.query(
         'SELECT id FROM inventory_items WHERE id = $1 AND tenant_id = $2',
         [inventory_item_id, tenant_id]

@@ -1,57 +1,38 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Box,
-  Typography,
-  Container,
-  Grid,
-  CircularProgress,
-  Alert,
-  Paper,
-  List,
-  ListItem,
-  ListItemText,
-  Divider,
-  Button,
-  TextField,
-  IconButton,
-  Chip, // Novo import para o status
+  Box, Typography, Container, Grid, CircularProgress, Alert, Paper, List,
+  ListItem, ListItemText, Divider, Button, TextField, IconButton, Chip,
 } from '@mui/material';
 import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteIcon from '@mui/icons-material/Delete';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle'; // Ícone para "Entregue"
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import PersonAddIcon from '@mui/icons-material/PersonAdd'; // Ícone para vincular cliente
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 import PaymentModal from './components/PaymentModal';
 import AddProductModal from './components/AddProductModal';
+import LinkCustomerModal from './components/LinkCustomerModal'; // 1. Nova importação
 
-// Função para mapear status para cores e textos
 const getStatusProps = (status) => {
   switch (status) {
-    case 'pending':
-      return { label: 'Pendente', color: 'default' };
-    case 'in_progress':
-      return { label: 'Em Preparo', color: 'warning' };
-    case 'ready':
-      return { label: 'Pronto para Entrega', color: 'info' };
-    case 'delivered':
-      return { label: 'Entregue', color: 'success' };
-    case 'paid':
-        return { label: 'Pago', color: 'success' };
-    case 'canceled':
-        return { label: 'Cancelado', color: 'error' };
-    default:
-      return { label: 'Desconhecido', color: 'default' };
+    case 'pending': return { label: 'Pendente', color: 'default' };
+    case 'in_progress': return { label: 'Em Preparo', color: 'warning' };
+    case 'ready': return { label: 'Pronto', color: 'info' };
+    case 'delivered': return { label: 'Entregue', color: 'success' };
+    case 'paid': return { label: 'Pago', color: 'success' };
+    case 'canceled': return { label: 'Cancelado', color: 'error' };
+    default: return { label: 'Desconhecido', color: 'default' };
   }
 };
-
 
 const OrderDetailPage = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
 
   const [order, setOrder] = useState(null);
+  const [customer, setCustomer] = useState(null); // Novo estado para dados do cliente
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -59,16 +40,27 @@ const OrderDetailPage = () => {
   
   const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
   const [isAddProductModalOpen, setAddProductModalOpen] = useState(false);
+  const [isLinkCustomerModalOpen, setLinkCustomerModalOpen] = useState(false); // 2. Novo estado para o modal
   const [productToAdd, setProductToAdd] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
+      setLoading(true);
       const [orderResponse, productsResponse] = await Promise.all([
         api.get(`/orders/${orderId}`),
         api.get('/products'),
       ]);
       setOrder(orderResponse.data);
       setProducts(productsResponse.data.filter(p => p.is_available));
+
+      // Se a comanda tiver um customer_id, busca os dados dele
+      if (orderResponse.data.customer_id) {
+        const customerResponse = await api.get(`/customers/${orderResponse.data.customer_id}`);
+        setCustomer(customerResponse.data);
+      } else {
+        setCustomer(null);
+      }
+
     } catch (err) {
       const msg = err.response?.data?.message || 'Falha ao carregar dados da comanda.';
       setError(msg);
@@ -128,6 +120,18 @@ const OrderDetailPage = () => {
        toast.error(error.response?.data?.message || `Erro ao atualizar status.`);
     }
   };
+  
+  // 3. Nova função para vincular o cliente
+  const handleLinkCustomer = async (customerId) => {
+    try {
+      await api.post(`/orders/${orderId}/customer`, { customer_id: customerId });
+      toast.success('Cliente vinculado com sucesso!');
+      setLinkCustomerModalOpen(false);
+      fetchData(); // Atualiza os dados para exibir o nome do cliente
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Erro ao vincular cliente.');
+    }
+  };
 
   const handlePayment = async (paymentMethod, tipAmount) => {
     setPaymentModalOpen(false);
@@ -148,10 +152,7 @@ const OrderDetailPage = () => {
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value);
+  const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
   const statusProps = getStatusProps(order?.status);
 
@@ -161,9 +162,7 @@ const OrderDetailPage = () => {
 
   if (error) {
     return (
-      <Container maxWidth="md">
-        <Alert severity="error" sx={{ mt: 4 }}>{error}</Alert>
-      </Container>
+      <Container maxWidth="md"><Alert severity="error" sx={{ mt: 4 }}>{error}</Alert></Container>
     );
   }
 
@@ -171,24 +170,13 @@ const OrderDetailPage = () => {
     <Container maxWidth="xl" sx={{ mt: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Box>
-          <Typography variant="h4" gutterBottom>
-            Comanda da Mesa {order?.table_number}
-          </Typography>
+          <Typography variant="h4" gutterBottom>Comanda da Mesa {order?.table_number}</Typography>
           <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
-            <Typography variant="subtitle1" color="text.secondary">
-              ID: {order?.id.substring(0, 8)}
-            </Typography>
-            {/* NOVO: Indicador de Status */}
+            <Typography variant="subtitle1" color="text.secondary">ID: {order?.id.substring(0, 8)}</Typography>
             <Chip label={statusProps.label} color={statusProps.color} size="small" />
           </Box>
         </Box>
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/pdv')}
-        >
-          Voltar ao PDV
-        </Button>
+        <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/pdv')}>Voltar ao PDV</Button>
       </Box>
 
       <Grid container spacing={4}>
@@ -211,15 +199,26 @@ const OrderDetailPage = () => {
         <Grid item xs={12} md={7}>
            <Typography variant="h6" gutterBottom>Itens na Comanda</Typography>
             <Paper elevation={2} sx={{ p: 2 }}>
+                 {/* 4. Box para exibir o cliente vinculado */}
+                 <Box sx={{ p: 2, mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f5f5f5', borderRadius: 1 }}>
+                    {customer ? (
+                      <Box>
+                        <Typography variant="overline" color="text.secondary">Cliente</Typography>
+                        <Typography variant="body1" fontWeight="bold">{`${customer.first_name} ${customer.last_name || ''}`}</Typography>
+                      </Box>
+                    ) : (
+                      <Typography color="text.secondary">Nenhum cliente vinculado.</Typography>
+                    )}
+                    <Button startIcon={<PersonAddIcon />} onClick={() => setLinkCustomerModalOpen(true)}>
+                      {customer ? 'Alterar' : 'Vincular Cliente'}
+                    </Button>
+                 </Box>
+
                  <List sx={{ minHeight: '40vh' }}>
                     {order?.items.map((item, index) => (
                         <React.Fragment key={item.id || index}>
                             <ListItem
-                                secondaryAction={
-                                    <IconButton edge="end" aria-label="delete" onClick={() => handleRemoveItem(item.id)}>
-                                        <DeleteIcon />
-                                    </IconButton>
-                                }
+                                secondaryAction={<IconButton edge="end" aria-label="delete" onClick={() => handleRemoveItem(item.id)}><DeleteIcon /></IconButton>}
                             >
                                 <ListItemText primary={`${item.quantity}x ${item.product_name}`} secondary={formatCurrency(item.unit_price)} />
                                 <Typography variant="body1" fontWeight="bold">{formatCurrency(item.quantity * item.unit_price)}</Typography>
@@ -235,38 +234,20 @@ const OrderDetailPage = () => {
                     <Typography variant="h5" fontWeight="bold" color="primary">{formatCurrency(order?.total_amount)}</Typography>
                  </Box>
                   <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', gap: 2}}>
-                    {/* LÓGICA DE BOTÕES ATUALIZADA */}
                     <Button variant="outlined" color="secondary" onClick={() => handleUpdateStatus('in_progress')} disabled={order?.items.length === 0}>
                         {order?.status === 'pending' ? 'Enviar para Cozinha' : 'Atualizar Cozinha'}
                     </Button>
-                    
-                    {order?.status === 'ready' && (
-                       <Button variant="contained" color="info" startIcon={<CheckCircleIcon />} onClick={() => handleUpdateStatus('delivered')}>
-                            Marcar como Entregue
-                       </Button>
-                    )}
-                    
-                    <Button variant="contained" color="success" onClick={() => setPaymentModalOpen(true)}>
-                        Fechar Conta
-                    </Button>
+                    {order?.status === 'ready' && (<Button variant="contained" color="info" startIcon={<CheckCircleIcon />} onClick={() => handleUpdateStatus('delivered')}>Marcar como Entregue</Button>)}
+                    <Button variant="contained" color="success" onClick={() => setPaymentModalOpen(true)}>Fechar Conta</Button>
                  </Box>
             </Paper>
         </Grid>
       </Grid>
       
-      <PaymentModal 
-        open={isPaymentModalOpen}
-        onClose={() => setPaymentModalOpen(false)}
-        onConfirm={handlePayment}
-        totalAmount={order?.total_amount || 0}
-      />
-      
-      <AddProductModal 
-        open={isAddProductModalOpen}
-        onClose={() => setAddProductModalOpen(false)}
-        onConfirm={handleConfirmAddProduct}
-        product={productToAdd}
-      />
+      <PaymentModal open={isPaymentModalOpen} onClose={() => setPaymentModalOpen(false)} onConfirm={handlePayment} totalAmount={order?.total_amount || 0}/>
+      <AddProductModal open={isAddProductModalOpen} onClose={() => setAddProductModalOpen(false)} onConfirm={handleConfirmAddProduct} product={productToAdd}/>
+      {/* 5. Renderizar o novo modal */}
+      <LinkCustomerModal open={isLinkCustomerModalOpen} onClose={() => setLinkCustomerModalOpen(false)} onCustomerLink={handleLinkCustomer} orderId={orderId}/>
     </Container>
   );
 };

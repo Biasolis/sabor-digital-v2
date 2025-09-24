@@ -58,8 +58,9 @@ export const createTenant = async (req, res) => {
 
 // Para o Super Admin listar todos os tenants
 export const listTenants = async (req, res) => {
+    // ALTERADO: Adicionado plan_id para exibição no frontend
     try {
-        const query = 'SELECT id, name, subdomain, status, created_at FROM tenants ORDER BY created_at DESC;';
+        const query = 'SELECT id, name, subdomain, status, plan_id, created_at FROM tenants ORDER BY created_at DESC;';
         const result = await db.query(query);
         res.status(200).json(result.rows);
     } catch (error) {
@@ -71,20 +72,21 @@ export const listTenants = async (req, res) => {
 // Para o Super Admin atualizar um tenant específico
 export const updateTenant = async (req, res) => {
     const { id } = req.params;
-    const { name, subdomain, status } = req.body;
+    // ALTERADO: Adicionado plan_id para permitir a alteração
+    const { name, subdomain, status, plan_id } = req.body;
 
-    if (!name || !subdomain || !status) {
-        return res.status(400).json({ message: 'Nome, subdomínio e status são obrigatórios.' });
+    if (!name || !subdomain || !status || !plan_id) {
+        return res.status(400).json({ message: 'Nome, subdomínio, plano e status são obrigatórios.' });
     }
 
     try {
         const query = `
             UPDATE tenants 
-            SET name = $1, subdomain = $2, status = $3, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $4
+            SET name = $1, subdomain = $2, status = $3, plan_id = $4, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $5
             RETURNING *;
         `;
-        const result = await db.query(query, [name, subdomain, status, id]);
+        const result = await db.query(query, [name, subdomain, status, plan_id, id]);
         
         if (result.rowCount === 0) {
             return res.status(404).json({ message: 'Cliente (tenant) não encontrado.' });
@@ -98,6 +100,22 @@ export const updateTenant = async (req, res) => {
         console.error('Erro ao atualizar tenant:', error);
         res.status(500).json({ message: 'Erro interno do servidor.' });
     }
+};
+
+// NOVA FUNÇÃO: Para o Super Admin deletar um tenant
+export const deleteTenant = async (req, res) => {
+  const { id } = req.params;
+  try {
+    // A opção ON DELETE CASCADE na tabela 'users' garantirá que os usuários sejam removidos junto com o tenant.
+    const result = await db.query('DELETE FROM tenants WHERE id = $1', [id]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Cliente (tenant) não encontrado.' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Erro ao deletar tenant:', error);
+    res.status(500).json({ message: 'Erro interno do servidor.' });
+  }
 };
 
 
@@ -128,7 +146,6 @@ export const getMyTenant = async (req, res) => {
 // Para o admin do tenant atualizar suas configurações
 export const updateMyTenant = async (req, res) => {
     const tenantId = req.user.tenant_id;
-    // O valor de 'is_open' vem como string do FormData, então precisa ser convertido
     const is_open = req.body.is_open === 'true'; 
     const { name, primary_color, secondary_color } = req.body;
     let logo_url;
@@ -171,10 +188,8 @@ export const updateMyTenant = async (req, res) => {
     }
 };
 
-// NOVA FUNÇÃO: Retorna dados públicos de um tenant para o cardápio
+// Retorna dados públicos de um tenant para o cardápio
 export const getPublicTenantInfo = async (req, res) => {
-    // O middleware 'resolveTenant' já encontrou o tenant pelo subdomínio no header
-    // e o anexou em req.tenant
     const { id } = req.tenant;
     try {
         const query = `

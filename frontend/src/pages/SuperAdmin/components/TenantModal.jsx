@@ -39,7 +39,6 @@ const TenantModal = ({ open, onClose, onSave, tenant, plans = [] }) => {
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>{isEditing ? 'Editar Cliente (Tenant)' : 'Criar Novo Cliente (Tenant)'}</DialogTitle>
       <DialogContent>
-        {/* Layout corrigido usando Box e margens */}
         <Box component="div" sx={{ mt: 2 }}>
           <TextField
             fullWidth
@@ -65,7 +64,7 @@ const TenantModal = ({ open, onClose, onSave, tenant, plans = [] }) => {
               value={formData.plan_id || ''}
               label="Plano"
               onChange={handleChange}
-              disabled={isEditing}
+              // AQUI ESTAVA A TRAVA "disabled={isEditing}" - FOI REMOVIDA
             >
               {plans.map((plan) => (
                   <MenuItem key={plan.id} value={plan.id}>{plan.name}</MenuItem>
