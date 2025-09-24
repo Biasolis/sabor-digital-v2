@@ -14,13 +14,38 @@ import {
   Divider,
   Button,
   TextField,
+  IconButton,
+  Chip, // Novo import para o status
 } from '@mui/material';
 import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import DeleteIcon from '@mui/icons-material/Delete';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'; // Ícone para "Entregue"
 import { toast } from 'react-toastify';
 import api from '../../services/api';
-
-// Importa o novo modal de pagamento
 import PaymentModal from './components/PaymentModal';
+import AddProductModal from './components/AddProductModal';
+
+// Função para mapear status para cores e textos
+const getStatusProps = (status) => {
+  switch (status) {
+    case 'pending':
+      return { label: 'Pendente', color: 'default' };
+    case 'in_progress':
+      return { label: 'Em Preparo', color: 'warning' };
+    case 'ready':
+      return { label: 'Pronto para Entrega', color: 'info' };
+    case 'delivered':
+      return { label: 'Entregue', color: 'success' };
+    case 'paid':
+        return { label: 'Pago', color: 'success' };
+    case 'canceled':
+        return { label: 'Cancelado', color: 'error' };
+    default:
+      return { label: 'Desconhecido', color: 'default' };
+  }
+};
+
 
 const OrderDetailPage = () => {
   const { orderId } = useParams();
@@ -31,17 +56,19 @@ const OrderDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
   const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [isAddProductModalOpen, setAddProductModalOpen] = useState(false);
+  const [productToAdd, setProductToAdd] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
-      // Não reseta o loading aqui para evitar piscar na tela ao adicionar itens
       const [orderResponse, productsResponse] = await Promise.all([
         api.get(`/orders/${orderId}`),
         api.get('/products'),
       ]);
       setOrder(orderResponse.data);
-      setProducts(productsResponse.data.filter(p => p.is_available)); // Mostra apenas produtos disponíveis
+      setProducts(productsResponse.data.filter(p => p.is_available));
     } catch (err) {
       const msg = err.response?.data?.message || 'Falha ao carregar dados da comanda.';
       setError(msg);
@@ -55,42 +82,63 @@ const OrderDetailPage = () => {
     fetchData();
   }, [fetchData]);
 
-  const handleAddProduct = async (product) => {
-    const quantity = parseInt(prompt(`Adicionar "${product.name}".\n\nQuantidade:`, "1"), 10);
-    
-    if (quantity && !isNaN(quantity) && quantity > 0) {
+  const handleAddProduct = (product) => {
+    setProductToAdd(product);
+    setAddProductModalOpen(true);
+  };
+  
+  const handleConfirmAddProduct = async (product, quantity) => {
+    try {
+        await api.post(`/orders/${orderId}/items`, {
+            product_id: product.id,
+            quantity: quantity
+        });
+        toast.success(`${quantity}x ${product.name} adicionado(s) à comanda.`);
+        await fetchData();
+    } catch(err) {
+        toast.error(err.response?.data?.message || 'Erro ao adicionar item.');
+    } finally {
+        setAddProductModalOpen(false);
+        setProductToAdd(null);
+    }
+  };
+  
+  const handleRemoveItem = async (itemId) => {
+    if (window.confirm('Tem certeza que deseja remover este item da comanda?')) {
         try {
-            await api.post(`/orders/${orderId}/items`, {
-                product_id: product.id,
-                quantity: quantity
-            });
-            toast.success(`${quantity}x ${product.name} adicionado(s) à comanda.`);
-            await fetchData(); // Recarrega os dados para mostrar o novo item
-        } catch(err) {
-            toast.error(err.response?.data?.message || 'Erro ao adicionar item.');
+            await api.delete(`/orders/${orderId}/items/${itemId}`);
+            toast.warn('Item removido da comanda.');
+            await fetchData();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Erro ao remover item.');
         }
     }
   };
 
   const handleUpdateStatus = async (status) => {
+    const messages = {
+      in_progress: 'Pedido enviado para a cozinha!',
+      delivered: 'Pedido marcado como entregue!'
+    }
     try {
       await api.patch(`/orders/${orderId}/status`, { status });
-      toast.info(`Pedido enviado para a cozinha!`);
+      toast.info(messages[status] || 'Status atualizado!');
       await fetchData();
     } catch (error) {
        toast.error(error.response?.data?.message || `Erro ao atualizar status.`);
     }
   };
 
-  const handlePayment = async (paymentMethod) => {
+  const handlePayment = async (paymentMethod, tipAmount) => {
     setPaymentModalOpen(false);
     try {
       await api.patch(`/orders/${orderId}/status`, { 
         status: 'paid',
-        payment_method: paymentMethod 
+        payment_method: paymentMethod,
+        tip_amount: tipAmount
       });
-      toast.success('Conta fechada e pagamento registrado com sucesso!');
-      navigate('/pdv'); // Redireciona de volta para a tela de mesas
+      toast.success('Conta fechada e pagamento registrado!');
+      navigate(`/receipt/${orderId}`);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Erro ao processar pagamento.');
     }
@@ -104,6 +152,8 @@ const OrderDetailPage = () => {
     style: 'currency',
     currency: 'BRL',
   }).format(value);
+
+  const statusProps = getStatusProps(order?.status);
 
   if (loading) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 5 }}><CircularProgress /></Box>;
@@ -119,12 +169,27 @@ const OrderDetailPage = () => {
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4 }}>
-      <Typography variant="h4" gutterBottom>
-        Comanda da Mesa {order?.table_number}
-      </Typography>
-      <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 4 }}>
-        ID da Comanda: {order?.id.substring(0, 8)}
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Box>
+          <Typography variant="h4" gutterBottom>
+            Comanda da Mesa {order?.table_number}
+          </Typography>
+          <Box sx={{display: 'flex', alignItems: 'center', gap: 2}}>
+            <Typography variant="subtitle1" color="text.secondary">
+              ID: {order?.id.substring(0, 8)}
+            </Typography>
+            {/* NOVO: Indicador de Status */}
+            <Chip label={statusProps.label} color={statusProps.color} size="small" />
+          </Box>
+        </Box>
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/pdv')}
+        >
+          Voltar ao PDV
+        </Button>
+      </Box>
 
       <Grid container spacing={4}>
         <Grid item xs={12} md={5}>
@@ -148,8 +213,14 @@ const OrderDetailPage = () => {
             <Paper elevation={2} sx={{ p: 2 }}>
                  <List sx={{ minHeight: '40vh' }}>
                     {order?.items.map((item, index) => (
-                        <React.Fragment key={index}>
-                            <ListItem>
+                        <React.Fragment key={item.id || index}>
+                            <ListItem
+                                secondaryAction={
+                                    <IconButton edge="end" aria-label="delete" onClick={() => handleRemoveItem(item.id)}>
+                                        <DeleteIcon />
+                                    </IconButton>
+                                }
+                            >
                                 <ListItemText primary={`${item.quantity}x ${item.product_name}`} secondary={formatCurrency(item.unit_price)} />
                                 <Typography variant="body1" fontWeight="bold">{formatCurrency(item.quantity * item.unit_price)}</Typography>
                             </ListItem>
@@ -164,19 +235,37 @@ const OrderDetailPage = () => {
                     <Typography variant="h5" fontWeight="bold" color="primary">{formatCurrency(order?.total_amount)}</Typography>
                  </Box>
                   <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', gap: 2}}>
-                    <Button variant="outlined" color="secondary" onClick={() => handleUpdateStatus('in_progress')}>Enviar para Cozinha</Button>
-                    <Button variant="contained" color="success" onClick={() => setPaymentModalOpen(true)}>Fechar Conta</Button>
+                    {/* LÓGICA DE BOTÕES ATUALIZADA */}
+                    <Button variant="outlined" color="secondary" onClick={() => handleUpdateStatus('in_progress')} disabled={order?.items.length === 0}>
+                        {order?.status === 'pending' ? 'Enviar para Cozinha' : 'Atualizar Cozinha'}
+                    </Button>
+                    
+                    {order?.status === 'ready' && (
+                       <Button variant="contained" color="info" startIcon={<CheckCircleIcon />} onClick={() => handleUpdateStatus('delivered')}>
+                            Marcar como Entregue
+                       </Button>
+                    )}
+                    
+                    <Button variant="contained" color="success" onClick={() => setPaymentModalOpen(true)}>
+                        Fechar Conta
+                    </Button>
                  </Box>
             </Paper>
         </Grid>
       </Grid>
       
-      {/* Modal de Pagamento */}
       <PaymentModal 
         open={isPaymentModalOpen}
         onClose={() => setPaymentModalOpen(false)}
         onConfirm={handlePayment}
         totalAmount={order?.total_amount || 0}
+      />
+      
+      <AddProductModal 
+        open={isAddProductModalOpen}
+        onClose={() => setAddProductModalOpen(false)}
+        onConfirm={handleConfirmAddProduct}
+        product={productToAdd}
       />
     </Container>
   );

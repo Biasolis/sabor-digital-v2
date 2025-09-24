@@ -1,15 +1,22 @@
 import { Router } from 'express';
-import { createTenant, getMyTenant } from '../controllers/tenantController.js';
-import { protect, isSuperAdmin, isTenantUser } from '../middleware/authMiddleware.js';
+import multer from 'multer';
+import { createTenant, getMyTenant, updateMyTenant, listTenants, updateTenant, getPublicTenantInfo } from '../controllers/tenantController.js';
+import { protect, isSuperAdmin, isTenantUser, isTenantAdmin } from '../middleware/authMiddleware.js';
+import { resolveTenant } from '../middleware/tenantMiddleware.js'; // Importa o middleware correto
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
+
+// --- Rota Pública (não requer token) ---
+router.get('/public', resolveTenant, getPublicTenantInfo); // NOVA ROTA PÚBLICA
 
 // --- Rotas para Super Admin ---
-// POST /api/tenants (Cria um novo tenant)
 router.post('/', protect, isSuperAdmin, createTenant);
+router.get('/', protect, isSuperAdmin, listTenants);
+router.put('/:id', protect, isSuperAdmin, updateTenant);
 
 // --- Rotas para Usuários do Tenant ---
-// GET /api/tenants/me (Busca os dados do tenant do usuário logado)
 router.get('/me', protect, isTenantUser, getMyTenant);
+router.put('/me', protect, isTenantAdmin, upload.single('logo'), updateMyTenant);
 
 export default router;

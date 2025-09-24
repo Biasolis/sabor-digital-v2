@@ -85,17 +85,20 @@ const PDVPage = () => {
           const response = await api.post('/orders', { table_id: table.id });
           const newOrder = response.data;
           toast.success(`Comanda #${newOrder.id.substring(0, 5)} aberta para a Mesa ${table.number}`);
-          // MODIFICADO: Navega para a tela de detalhes do pedido
           navigate(`/order/${newOrder.id}`);
         } catch (error) {
           toast.error(error.response?.data?.message || 'Não foi possível abrir a comanda.');
         }
       }
     } else {
-      toast.info(`Mesa ${table.number} já está ocupada. Funcionalidade de visualizar comanda em desenvolvimento.`);
-      // No futuro, aqui buscaremos a comanda existente para esta mesa
-      // const order = await findOpenOrderForTable(table.id);
-      // navigate(`/order/${order.id}`);
+      // LÓGICA MODIFICADA: Buscar a comanda existente
+      try {
+        const response = await api.get(`/orders/table/${table.id}`);
+        const order = response.data;
+        navigate(`/order/${order.id}`);
+      } catch (error) {
+        toast.error(error.response?.data?.message || 'Não foi possível encontrar a comanda desta mesa.');
+      }
     }
   };
 

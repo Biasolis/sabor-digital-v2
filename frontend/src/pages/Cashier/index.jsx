@@ -13,18 +13,20 @@ import {
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import LockIcon from '@mui/icons-material/Lock';
+import AddIcon from '@mui/icons-material/Add';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 import OpenSessionModal from './components/OpenSessionModal';
 import CloseSessionModal from './components/CloseSessionModal';
+import CashRegisterModal from './components/CashRegisterModal'; // Importa o novo modal
 
 const CashierPage = () => {
   const [cashRegisters, setCashRegisters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Estados para os modais
-  const [isOpenModalOpen, setIsOpenModalOpen] = useState(false); // CORRIGIDO AQUI
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [isOpenModalOpen, setIsOpenModalOpen] = useState(false);
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
   const [selectedRegister, setSelectedRegister] = useState(null);
 
@@ -54,6 +56,17 @@ const CashierPage = () => {
   const handleCloseModal = (register) => {
     setSelectedRegister(register);
     setIsCloseModalOpen(true);
+  };
+
+  const handleSaveRegister = async (name) => {
+    try {
+      await api.post('/cash-registers', { name });
+      toast.success(`Caixa "${name}" criado com sucesso!`);
+      setIsRegisterModalOpen(false);
+      fetchCashRegisters();
+    } catch (error) {
+       toast.error(error.response?.data?.message || 'Não foi possível criar o caixa.');
+    }
   };
 
   const handleOpenSession = async (openingBalance) => {
@@ -93,6 +106,9 @@ const CashierPage = () => {
         <Typography variant="h4" component="h1">
           Gerenciamento de Caixa
         </Typography>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsRegisterModalOpen(true)}>
+          Novo Caixa
+        </Button>
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -135,11 +151,17 @@ const CashierPage = () => {
         {cashRegisters.length === 0 && !loading && (
              <Grid item xs={12}>
                 <Paper sx={{p: 3, textAlign: 'center'}}>
-                    <Typography color="text.secondary">Nenhum caixa cadastrado. Crie um na seção de configurações.</Typography>
+                    <Typography color="text.secondary">Nenhum caixa cadastrado. Clique em "Novo Caixa" para começar.</Typography>
                 </Paper>
             </Grid>
         )}
       </Grid>
+      
+      <CashRegisterModal
+        open={isRegisterModalOpen}
+        onClose={() => setIsRegisterModalOpen(false)}
+        onSave={handleSaveRegister}
+      />
       
       <OpenSessionModal
         open={isOpenModalOpen}

@@ -212,3 +212,17 @@ CREATE TABLE customers (
 ALTER TABLE orders
 ADD COLUMN customer_id UUID,
 ADD CONSTRAINT fk_customer FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE SET NULL;
+
+ALTER TABLE orders 
+ADD COLUMN tip_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00;
+
+ALTER TABLE orders 
+ADD COLUMN final_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00;
+
+ALTER TABLE tenants
+ADD COLUMN logo_url VARCHAR(255),
+ADD COLUMN primary_color VARCHAR(7),
+ADD COLUMN secondary_color VARCHAR(7);
+
+ALTER TABLE tenants
+ADD COLUMN is_open BOOLEAN NOT NULL DEFAULT true;

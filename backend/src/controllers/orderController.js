@@ -1,7 +1,7 @@
 import db from '../database/db.js';
 import { sendMessage as sendTicketzMessage } from '../services/ticketzService.js';
 
-// NOVA FUNÇÃO: Listar todas as comandas de um tenant
+// Listar todas as comandas de um tenant
 export const listOrders = async (req, res) => {
   const { tenant_id } = req.user;
   const { status } = req.query; // Filtro opcional por status
@@ -133,7 +133,7 @@ export const getOrderDetails = async (req, res) => {
 
   try {
     const orderQuery = `
-      SELECT o.id, o.status, o.total_amount, o.created_at, t.number as table_number
+      SELECT o.id, o.status, o.total_amount, o.tip_amount, o.final_amount, o.created_at, t.number as table_number
       FROM orders o
       LEFT JOIN tables t ON o.table_id = t.id
       WHERE o.id = $1 AND o.tenant_id = $2;
@@ -145,7 +145,7 @@ export const getOrderDetails = async (req, res) => {
     }
 
     const itemsQuery = `
-      SELECT i.quantity, i.unit_price, i.observation, p.name as product_name
+      SELECT i.id, i.quantity, i.unit_price, i.observation, p.name as product_name
       FROM order_items i
       JOIN products p ON i.product_id = p.id
       WHERE i.order_id = $1;
@@ -164,10 +164,10 @@ export const getOrderDetails = async (req, res) => {
   }
 };
 
-// ATUALIZADO: Função para atualizar status e disparar notificação
+// Atualizar status da comanda (inclui pagamento e gorjeta)
 export const updateOrderStatus = async (req, res) => {
   const { orderId } = req.params;
-  const { status, payment_method } = req.body;
+  const { status, payment_method, tip_amount } = req.body;
   const { tenant_id } = req.user;
 
   const allowedStatus = ['pending', 'in_progress', 'ready', 'delivered', 'canceled', 'paid'];
@@ -182,16 +182,16 @@ export const updateOrderStatus = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const currentOrder = await client.query(
+    const currentOrderResult = await client.query(
       'SELECT status, table_id, total_amount, customer_id FROM orders WHERE id = $1 AND tenant_id = $2',
       [orderId, tenant_id]
     );
 
-    if (currentOrder.rowCount === 0) {
+    if (currentOrderResult.rowCount === 0) {
       throw new Error('Comanda não encontrada.');
     }
 
-    const { status: oldStatus, table_id, total_amount, customer_id } = currentOrder.rows[0];
+    const { status: oldStatus, table_id, total_amount, customer_id } = currentOrderResult.rows[0];
 
     if (status === 'paid' && oldStatus !== 'paid') {
       const openSession = await client.query(
@@ -203,44 +203,35 @@ export const updateOrderStatus = async (req, res) => {
       }
       const cash_session_id = openSession.rows[0].id;
       
+      const finalTipAmount = parseFloat(tip_amount) || 0;
+      const finalAmount = parseFloat(total_amount) + finalTipAmount;
+
+      await client.query(
+        'UPDATE orders SET tip_amount = $1, final_amount = $2 WHERE id = $3',
+        [finalTipAmount, finalAmount, orderId]
+      );
+
       await client.query(
         `INSERT INTO transactions (tenant_id, cash_session_id, order_id, type, amount, payment_method, description)
          VALUES ($1, $2, $3, 'revenue', $4, $5, $6)`,
-        [tenant_id, cash_session_id, orderId, total_amount, payment_method, `Venda da comanda ${orderId}`]
+        [tenant_id, cash_session_id, orderId, finalAmount, payment_method, `Venda da comanda ${orderId}`]
       );
         
-      const orderItems = await client.query(
-        'SELECT product_id, quantity FROM order_items WHERE order_id = $1',
-        [orderId]
-      );
-
+      const orderItems = await client.query('SELECT product_id, quantity FROM order_items WHERE order_id = $1', [orderId]);
       for (const item of orderItems.rows) {
-        const recipe = await client.query(
-          'SELECT inventory_item_id, quantity_consumed FROM product_inventory_usage WHERE product_id = $1',
-          [item.product_id]
-        );
+        const recipe = await client.query('SELECT inventory_item_id, quantity_consumed FROM product_inventory_usage WHERE product_id = $1', [item.product_id]);
         for (const ingredient of recipe.rows) {
           const totalToDeduct = item.quantity * ingredient.quantity_consumed;
-          await client.query(
-            'UPDATE inventory_items SET quantity_on_hand = quantity_on_hand - $1 WHERE id = $2',
-            [totalToDeduct, ingredient.inventory_item_id]
-          );
+          await client.query('UPDATE inventory_items SET quantity_on_hand = quantity_on_hand - $1 WHERE id = $2', [totalToDeduct, ingredient.inventory_item_id]);
         }
       }
       
       if (table_id) {
-        await client.query(
-          'UPDATE tables SET status = \'available\' WHERE id = $1',
-          [table_id]
-        );
+        await client.query('UPDATE tables SET status = \'available\' WHERE id = $1', [table_id]);
       }
     }
 
-    const query = `
-      UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2 AND tenant_id = $3
-      RETURNING id, status;
-    `;
+    const query = `UPDATE orders SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND tenant_id = $3 RETURNING id, status;`;
     const result = await client.query(query, [status, orderId, tenant_id]);
     
     if (customer_id) {
@@ -249,15 +240,9 @@ export const updateOrderStatus = async (req, res) => {
             const { phone, name } = customer.rows[0];
             let messageBody = '';
             switch(status) {
-                case 'in_progress':
-                    messageBody = `Olá ${name}, seu pedido #${orderId.substring(0, 5)} já está sendo preparado!`;
-                    break;
-                case 'ready':
-                    messageBody = `Boas notícias, ${name}! Seu pedido #${orderId.substring(0, 5)} está pronto para ser servido/retirado.`;
-                    break;
-                case 'delivered':
-                    messageBody = `Seu pedido #${orderId.substring(0, 5)} foi entregue. Bom apetite!`;
-                    break;
+                case 'in_progress': messageBody = `Olá ${name}, seu pedido #${orderId.substring(0, 5)} já está sendo preparado!`; break;
+                case 'ready': messageBody = `Boas notícias, ${name}! Seu pedido #${orderId.substring(0, 5)} está pronto para ser servido/retirado.`; break;
+                case 'delivered': messageBody = `Seu pedido #${orderId.substring(0, 5)} foi entregue. Bom apetite!`; break;
             }
             if (messageBody) {
                 sendTicketzMessage(phone, messageBody);
@@ -273,5 +258,67 @@ export const updateOrderStatus = async (req, res) => {
     res.status(500).json({ message: 'Erro interno do servidor.', details: error.message });
   } finally {
     client.release();
+  }
+};
+
+// Remover um item de uma comanda
+export const removeOrderItem = async (req, res) => {
+    const { orderId, itemId } = req.params;
+    const { tenant_id } = req.user;
+
+    const client = await db.pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        const itemResult = await client.query(
+            'SELECT oi.id, oi.quantity, oi.unit_price FROM order_items oi JOIN orders o ON oi.order_id = o.id WHERE oi.id = $1 AND o.tenant_id = $2', 
+            [itemId, tenant_id]
+        );
+
+        if (itemResult.rowCount === 0) {
+            throw new Error('Item não encontrado ou não pertence a esta comanda.');
+        }
+
+        const item = itemResult.rows[0];
+        const amountToSubtract = item.quantity * item.unit_price;
+
+        await client.query('DELETE FROM order_items WHERE id = $1', [itemId]);
+
+        const updatedOrder = await client.query(
+            'UPDATE orders SET total_amount = total_amount - $1 WHERE id = $2 RETURNING *', 
+            [amountToSubtract, orderId]
+        );
+
+        await client.query('COMMIT');
+        res.status(200).json(updatedOrder.rows[0]);
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Erro ao remover item da comanda:', error);
+        res.status(400).json({ message: error.message || 'Não foi possível remover o item.' });
+    } finally {
+        client.release();
+    }
+};
+
+// Buscar comanda aberta por mesa
+export const getOpenOrderByTable = async (req, res) => {
+  const { tableId } = req.params;
+  const { tenant_id } = req.user;
+
+  try {
+    const query = `
+      SELECT id FROM orders 
+      WHERE tenant_id = $1 AND table_id = $2 AND status NOT IN ('paid', 'canceled')
+      ORDER BY created_at DESC LIMIT 1;
+    `;
+    const result = await db.query(query, [tenant_id, tableId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Nenhuma comanda aberta encontrada para esta mesa.' });
+    }
+    res.status(200).json(result.rows[0]);
+  } catch (error) {
+    console.error('Erro ao buscar comanda por mesa:', error);
+    res.status(500).json({ message: 'Erro interno do servidor.' });
   }
 };

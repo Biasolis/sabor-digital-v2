@@ -4,7 +4,9 @@ import {
   addOrderItem,
   getOrderDetails,
   updateOrderStatus,
-  listOrders // Nova importação
+  listOrders,
+  getOpenOrderByTable,
+  removeOrderItem // Nova importação
 } from '../controllers/orderController.js';
 import { 
   protect, 
@@ -15,21 +17,14 @@ import {
 
 const router = Router();
 
-// Todas as rotas aqui requerem que o usuário esteja logado e pertença a um tenant
 router.use(protect, isTenantUser);
 
-// Rota para listar todas as comandas (usada pela cozinha)
 router.get('/', listOrders);
-
-// Rotas para equipe operacional (Garçom, Caixa, Admin)
+router.get('/table/:tableId', getOpenOrderByTable);
 router.post('/', isOperationalUser, createOrder);
 router.post('/:orderId/items', isOperationalUser, addOrderItem);
-
-// Qualquer usuário da loja pode ver os detalhes de uma comanda
+router.delete('/:orderId/items/:itemId', isOperationalUser, removeOrderItem); // NOVA ROTA
 router.get('/:orderId', getOrderDetails);
-
-// Apenas Cozinha, Caixa e Admin podem mudar o status
 router.patch('/:orderId/status', isKitchenStaff, updateOrderStatus);
-
 
 export default router;

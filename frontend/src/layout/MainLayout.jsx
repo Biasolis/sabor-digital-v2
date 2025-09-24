@@ -24,6 +24,8 @@ import TableRestaurantIcon from '@mui/icons-material/TableRestaurant';
 import SoupKitchenIcon from '@mui/icons-material/SoupKitchen';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import InventoryIcon from '@mui/icons-material/Inventory';
+import SettingsIcon from '@mui/icons-material/Settings';
+import AssessmentIcon from '@mui/icons-material/Assessment'; // Ícone para relatórios
 
 const drawerWidth = 240;
 
@@ -34,15 +36,23 @@ const MainLayout = () => {
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-    { text: 'PDV', icon: <PointOfSaleIcon />, path: '/pdv' },
+    { text: 'PDV', icon: <PointOfSaleIcon />, path: '/pdV' },
     { text: 'Cozinha', icon: <SoupKitchenIcon />, path: '/kitchen' },
     { text: 'Caixa', icon: <AttachMoneyIcon />, path: '/cashier' },
-    { isDivider: true }, // Divisor para separar as seções
+  ];
+
+  const adminMenuItems = [
+    { isDivider: true },
+    { text: 'Relatórios', icon: <AssessmentIcon />, path: '/reports' },
     { text: 'Cardápio', icon: <RestaurantMenuIcon />, path: '/admin/menu' },
     { text: 'Estoque', icon: <InventoryIcon />, path: '/admin/inventory' },
     { text: 'Mesas', icon: <TableRestaurantIcon />, path: '/admin/tables' },
     { text: 'Usuários', icon: <PeopleIcon />, path: '/users' },
+    { text: 'Configurações', icon: <SettingsIcon />, path: '/settings' },
   ];
+  
+  // Exibe os itens de menu de admin apenas se o usuário tiver a função 'admin'
+  const finalMenuItems = user?.role === 'admin' ? [...menuItems, ...adminMenuItems] : menuItems;
 
   const drawer = (
     <div>
@@ -53,7 +63,7 @@ const MainLayout = () => {
       </Toolbar>
       <Divider />
       <List>
-        {menuItems.map((item, index) => (
+        {finalMenuItems.map((item, index) => (
           item.isDivider ? <Divider key={`divider-${index}`} sx={{ my: 1 }} /> :
           <ListItem key={item.text} disablePadding>
             <ListItemButton onClick={() => navigate(item.path)}>

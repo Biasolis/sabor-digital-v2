@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import db from '../database/db.js';
+import { uploadFile } from '../lib/s3.js';
 
 // Função para o Super Admin criar um novo tenant
 export const createTenant = async (req, res) => {
@@ -55,14 +56,59 @@ export const createTenant = async (req, res) => {
   }
 };
 
-// NOVA FUNÇÃO: Para o usuário logado buscar os dados do seu próprio tenant
+// Para o Super Admin listar todos os tenants
+export const listTenants = async (req, res) => {
+    try {
+        const query = 'SELECT id, name, subdomain, status, created_at FROM tenants ORDER BY created_at DESC;';
+        const result = await db.query(query);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('Erro ao listar tenants:', error);
+        res.status(500).json({ message: 'Erro interno do servidor.' });
+    }
+};
+
+// Para o Super Admin atualizar um tenant específico
+export const updateTenant = async (req, res) => {
+    const { id } = req.params;
+    const { name, subdomain, status } = req.body;
+
+    if (!name || !subdomain || !status) {
+        return res.status(400).json({ message: 'Nome, subdomínio e status são obrigatórios.' });
+    }
+
+    try {
+        const query = `
+            UPDATE tenants 
+            SET name = $1, subdomain = $2, status = $3, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $4
+            RETURNING *;
+        `;
+        const result = await db.query(query, [name, subdomain, status, id]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Cliente (tenant) não encontrado.' });
+        }
+        
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        if (error.code === '23505') {
+            return res.status(409).json({ message: 'Este subdomínio já está em uso por outro cliente.' });
+        }
+        console.error('Erro ao atualizar tenant:', error);
+        res.status(500).json({ message: 'Erro interno do servidor.' });
+    }
+};
+
+
+// Para o usuário logado (admin da loja) buscar os dados do seu próprio tenant
 export const getMyTenant = async (req, res) => {
-  // O ID do tenant vem do token, que foi decodificado pelo middleware 'protect'
   const tenantId = req.user.tenant_id;
 
   try {
     const query = `
-      SELECT id, name, subdomain, status, created_at 
+      SELECT id, name, subdomain, status, created_at, logo_url, 
+             primary_color, secondary_color, is_open 
       FROM tenants 
       WHERE id = $1;
     `;
@@ -77,4 +123,72 @@ export const getMyTenant = async (req, res) => {
     console.error('Erro ao buscar dados do tenant:', error);
     res.status(500).json({ message: 'Erro interno do servidor.' });
   }
+};
+
+// Para o admin do tenant atualizar suas configurações
+export const updateMyTenant = async (req, res) => {
+    const tenantId = req.user.tenant_id;
+    // O valor de 'is_open' vem como string do FormData, então precisa ser convertido
+    const is_open = req.body.is_open === 'true'; 
+    const { name, primary_color, secondary_color } = req.body;
+    let logo_url;
+
+    try {
+        if (req.file) {
+            const { buffer, mimetype } = req.file;
+            logo_url = await uploadFile(buffer, mimetype, tenantId);
+        }
+
+        const currentTenant = await db.query('SELECT logo_url FROM tenants WHERE id = $1', [tenantId]);
+        
+        const query = `
+            UPDATE tenants SET
+                name = $1,
+                primary_color = $2,
+                secondary_color = $3,
+                logo_url = $4,
+                is_open = $5,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $6
+            RETURNING id, name, logo_url, primary_color, secondary_color, is_open;
+        `;
+        
+        const params = [
+            name,
+            primary_color,
+            secondary_color,
+            logo_url || currentTenant.rows[0].logo_url,
+            is_open,
+            tenantId
+        ];
+        
+        const result = await db.query(query, params);
+        res.status(200).json(result.rows[0]);
+
+    } catch (error) {
+        console.error('Erro ao atualizar configurações do tenant:', error);
+        res.status(500).json({ message: 'Erro interno do servidor.' });
+    }
+};
+
+// NOVA FUNÇÃO: Retorna dados públicos de um tenant para o cardápio
+export const getPublicTenantInfo = async (req, res) => {
+    // O middleware 'resolveTenant' já encontrou o tenant pelo subdomínio no header
+    // e o anexou em req.tenant
+    const { id } = req.tenant;
+    try {
+        const query = `
+            SELECT name, logo_url, primary_color, secondary_color, is_open
+            FROM tenants
+            WHERE id = $1;
+        `;
+        const result = await db.query(query, [id]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Informações da loja não encontradas.' });
+        }
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        console.error('Erro ao buscar informações públicas do tenant:', error);
+        res.status(500).json({ message: 'Erro interno do servidor.' });
+    }
 };
