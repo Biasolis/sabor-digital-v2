@@ -7,7 +7,7 @@ const getSubdomain = () => {
   // Isso permite que o cardápio público carregue sem um subdomínio real.
   // Garanta que você possui um tenant com este subdomínio no seu banco de dados.
   if (host === 'localhost' || host.startsWith('127.0.0.1')) {
-    return 'calabria'; // Exemplo: use o subdomínio de um tenant de teste
+    return 'calabria'; // Mantenha um subdomínio padrão para o menu público
   }
   
   const parts = host.split('.');
@@ -21,10 +21,14 @@ const api = axios.create({
   baseURL: 'http://localhost:3333/api', // A porta do nosso backend
 });
 
-// Adiciona um interceptador para anexar o header do subdomínio em todas as requisições.
-// O backend usará isso para rotas públicas. Para rotas protegidas,
-// a prioridade será o tenant_id que já está no token JWT.
+// Interceptador de API APRIMORADO
 api.interceptors.request.use((config) => {
+  // Se a URL da requisição for para o superadmin, não fazemos nada.
+  if (config.url.includes('/superadmin')) {
+    return config;
+  }
+
+  // Para todas as outras requisições, continuamos adicionando o subdomínio.
   const subdomain = getSubdomain();
   if (subdomain) {
     config.headers['X-Tenant-Subdomain'] = subdomain;

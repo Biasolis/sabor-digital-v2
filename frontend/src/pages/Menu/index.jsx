@@ -6,11 +6,14 @@ import {
 import { toast } from 'react-toastify';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
+import { useTenantTheme } from '../../contexts/TenantThemeContext'; // 1. Importar o hook do tema
 import CategoryList from './components/CategoryList';
 import ProductList from './components/ProductList';
 
 const Menu = () => {
-  const [tenantInfo, setTenantInfo] = useState({ name: 'Cardápio Digital', is_open: true });
+  // 2. Usar o hook para obter as informações do tenant e o status de carregamento
+  const { tenantInfo, loading: themeLoading } = useTenantTheme();
+
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,19 +21,14 @@ const Menu = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
-      const tenantResponse = await api.get('/tenants/public');
+      // A busca de tenantInfo já é feita pelo context, então buscamos apenas o resto
       const [categoriesResponse, productsResponse] = await Promise.all([
         api.get('/categories'),
         api.get('/products'),
       ]);
-
-      setTenantInfo(tenantResponse.data);
       setCategories(categoriesResponse.data);
       setProducts(productsResponse.data);
-
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Não foi possível carregar o cardápio.';
       setError(errorMessage);
@@ -40,48 +38,49 @@ const Menu = () => {
     }
   }, []);
 
-
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
   const filteredProducts = selectedCategoryId
-    ? products.filter(p => p.category_name === categories.find(c => c.id === selectedCategoryId)?.name)
+    ? products.filter(p => categories.find(c => c.id === selectedCategoryId)?.name === p.category_name)
     : products;
+
+  const isLoading = themeLoading || loading;
 
   return (
     <Box sx={{ display: 'flex' }}>
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
         <AppBar position="static" color="default" elevation={1} sx={{ mb: 2 }}>
           <Toolbar>
+            {/* 3. Usar os dados do tenantInfo vindos do contexto */}
             <Typography variant="h5" component="div" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
-              {tenantInfo.name}
-              {!loading && (
+              {tenantInfo?.name || 'Cardápio'}
+              {!isLoading && (
                 <Chip
-                  label={tenantInfo.is_open ? 'Aberto' : 'Fechado'}
-                  color={tenantInfo.is_open ? 'success' : 'error'}
+                  label={tenantInfo?.is_open ? 'Aberto' : 'Fechado'}
+                  color={tenantInfo?.is_open ? 'success' : 'error'}
                   size="small"
                 />
               )}
             </Typography>
-            {/* Botões para Cliente e Funcionário */}
-            <ButtonGroup variant="text" color="inherit">
+            <ButtonGroup variant="text" color="primary">
               <Button component={Link} to="/customer-login">Acompanhar Comanda</Button>
               <Button component={Link} to="/login">Acesso Restrito</Button>
             </ButtonGroup>
           </Toolbar>
         </AppBar>
         
-        {!loading && !tenantInfo.is_open && (
+        {!isLoading && !tenantInfo?.is_open && (
             <Alert severity="warning" sx={{ mb: 2 }}>
-                No momento, estamos fechados e não estamos aceitando novos pedidos. O cardápio está disponível apenas para visualização.
+                No momento, estamos fechados. O cardápio está disponível apenas para visualização.
             </Alert>
         )}
 
-        {loading && ( <Box sx={{ display: 'flex', justifyContent: 'center', my: 5 }}><CircularProgress /></Box> )}
+        {isLoading && ( <Box sx={{ display: 'flex', justifyContent: 'center', my: 5 }}><CircularProgress /></Box> )}
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-        {!loading && !error && (
+        {!isLoading && !error && (
           <Grid container spacing={3}>
             <Grid item xs={12} md={3}>
               <Typography variant="h6" gutterBottom sx={{ pl: 2 }}>Categorias</Typography>

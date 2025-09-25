@@ -1,26 +1,48 @@
 import db from '../database/db.js';
 import { sendMessage as sendTicketzMessage } from '../services/ticketzService.js';
 
-// Listar todas as comandas de um tenant (Visão do funcionário)
+// Listar todas as comandas de um tenant (Visão do funcionário) - APRIMORADO
 export const listOrders = async (req, res) => {
   const { tenant_id } = req.user;
-  const { status } = req.query;
+  const { status, startDate, endDate } = req.query;
 
   try {
+    let paramIndex = 1;
     let query = `
-      SELECT o.id, o.status, o.total_amount, t.number as table_number
+      SELECT 
+        o.id, 
+        o.status, 
+        o.total_amount, 
+        o.created_at,
+        t.number as table_number,
+        c.first_name as customer_first_name,
+        c.last_name as customer_last_name
       FROM orders o
       LEFT JOIN tables t ON o.table_id = t.id
-      WHERE o.tenant_id = $1
+      LEFT JOIN customers c ON o.customer_id = c.id
+      WHERE o.tenant_id = $${paramIndex++}
     `;
     const params = [tenant_id];
 
     if (status) {
-      query += ` AND o.status = $2`;
-      params.push(status);
+      // Permite múltiplos status, ex: ?status=paid,canceled
+      const statusList = status.split(',');
+      query += ` AND o.status = ANY($${paramIndex++}::order_status[])`;
+      params.push(statusList);
     }
     
-    query += ` ORDER BY o.created_at ASC;`;
+    if (startDate) {
+        query += ` AND o.created_at >= $${paramIndex++}`;
+        params.push(startDate);
+    }
+
+    if (endDate) {
+        const adjustedEndDate = `${endDate}T23:59:59.999Z`;
+        query += ` AND o.created_at <= $${paramIndex++}`;
+        params.push(adjustedEndDate);
+    }
+    
+    query += ` ORDER BY o.created_at DESC;`;
 
     const result = await db.query(query, params);
     res.status(200).json(result.rows);
@@ -300,7 +322,7 @@ export const updateOrderStatus = async (req, res) => {
   }
 };
 
-// NOVA FUNÇÃO: Vincular um cliente a uma comanda
+// Vincular um cliente a uma comanda
 export const linkCustomerToOrder = async (req, res) => {
   const { orderId } = req.params;
   const { customer_id } = req.body;
@@ -329,7 +351,6 @@ export const linkCustomerToOrder = async (req, res) => {
     res.status(500).json({ message: 'Erro interno do servidor.' });
   }
 };
-
 
 // Remover um item de uma comanda
 export const removeOrderItem = async (req, res) => {

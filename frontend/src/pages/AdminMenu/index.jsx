@@ -1,35 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box,
-  Typography,
-  Button,
-  Container,
-  Paper,
-  Grid,
-  CircularProgress,
-  Alert,
-  IconButton,
-  Tooltip,
+  Box, Typography, Button, Container, Paper, Grid, CircularProgress, Alert,
+  IconButton, Tooltip, useTheme, useMediaQuery, Tabs, Tab
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'; // Ícone para Ficha Técnica
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 
 import ProductCard from '../../pages/Menu/components/ProductCard';
 import CategoryModal from './components/CategoryModal';
 import ProductModal from './components/ProductModal';
-import RecipeModal from './components/RecipeModal'; // Importa o novo modal de Receita
+import RecipeModal from './components/RecipeModal';
 
 const AdminMenu = () => {
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
-  const [inventoryItems, setInventoryItems] = useState([]); // Estado para itens de estoque
+  const [inventoryItems, setInventoryItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState('all'); // 'all' para "Todos os Produtos"
 
   // Estados para controlar os modais
   const [isCategoryModalOpen, setCategoryModalOpen] = useState(false);
@@ -38,18 +30,21 @@ const AdminMenu = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [isRecipeModalOpen, setRecipeModalOpen] = useState(false);
   const [selectedProductForRecipe, setSelectedProductForRecipe] = useState(null);
+  
+  // Hook para detectar o tamanho da tela
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const fetchData = useCallback(async () => {
     try {
-      // Busca categorias, produtos e itens de estoque em paralelo para otimização
       const [categoriesResponse, productsResponse, inventoryResponse] = await Promise.all([
         api.get('/categories'),
         api.get('/products'),
-        api.get('/inventory'), // Nova chamada para buscar o estoque
+        api.get('/inventory'),
       ]);
       setCategories(categoriesResponse.data);
       setProducts(productsResponse.data);
-      setInventoryItems(inventoryResponse.data); // Armazena os itens de estoque
+      setInventoryItems(inventoryResponse.data);
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Não foi possível carregar os dados.';
       setError(errorMessage);
@@ -63,13 +58,11 @@ const AdminMenu = () => {
     fetchData();
   }, [fetchData]);
 
-  // Abre o modal de Ficha Técnica para um produto específico
   const handleOpenRecipeModal = (product) => {
     setSelectedProductForRecipe(product);
     setRecipeModalOpen(true);
   };
 
-  // Funções de CRUD para Categorias
   const handleSaveCategory = async (categoryData) => {
     try {
       if (categoryData.id) {
@@ -100,7 +93,6 @@ const AdminMenu = () => {
     }
   };
 
-  // Funções de CRUD para Produtos
   const handleSaveProduct = async (productData, imageFile) => {
     const isEditing = !!productData.id;
     const endpoint = isEditing ? `/products/${productData.id}` : '/products';
@@ -115,9 +107,7 @@ const AdminMenu = () => {
         formData.append('image', imageFile);
 
         await api.post(`/products/${savedProduct.id}/image`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+          headers: { 'Content-Type': 'multipart/form-data' },
         });
       }
 
@@ -144,9 +134,100 @@ const AdminMenu = () => {
   };
 
 
-  const filteredProducts = selectedCategoryId
-    ? products.filter(p => categories.find(c => c.id === selectedCategoryId)?.name === p.category_name)
+  const filteredProducts = selectedCategoryId !== 'all'
+    ? products.filter(p => p.category_id === selectedCategoryId)
     : products;
+
+  const renderCategories = () => {
+    // Renderização para Mobile/Tablet (Abas)
+    if (isMobile) {
+      return (
+        <Paper elevation={2} sx={{ mb: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, pl:2 }}>
+            <Typography variant="h6">Categorias</Typography>
+            <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => { setEditingCategory(null); setCategoryModalOpen(true); }}>
+              Nova
+            </Button>
+          </Box>
+          <Tabs
+            value={selectedCategoryId}
+            onChange={(e, newValue) => setSelectedCategoryId(newValue)}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
+          >
+            <Tab label="Todos os Produtos" value="all" />
+            {categories.map(cat => (
+              <Tab key={cat.id} label={cat.name} value={cat.id} />
+            ))}
+          </Tabs>
+        </Paper>
+      );
+    }
+
+    // Renderização para Desktop (Lista Lateral)
+    return (
+      <Grid item xs={12} md={3}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">Categorias</Typography>
+          <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => { setEditingCategory(null); setCategoryModalOpen(true); }}>
+            Nova
+          </Button>
+        </Box>
+        <Paper elevation={2}>
+          <Box sx={{ borderBottom: '1px solid #eee' }}>
+              <Typography 
+                  onClick={() => setSelectedCategoryId('all')}
+                  sx={{ p: 2, cursor: 'pointer', fontWeight: selectedCategoryId === 'all' ? 'bold' : 'normal', bgcolor: selectedCategoryId === 'all' ? 'action.selected' : 'transparent' }}
+              >
+                  Todos os Produtos
+              </Typography>
+          </Box>
+          {categories.map(cat => (
+            <Box key={cat.id} sx={{ display: 'flex', alignItems: 'center', '&:hover .actions': { opacity: 1 }, borderBottom: '1px solid #eee' }}>
+              <Typography onClick={() => setSelectedCategoryId(cat.id)} sx={{ flexGrow: 1, cursor: 'pointer', p: 2, bgcolor: selectedCategoryId === cat.id ? 'action.selected' : 'transparent', fontWeight: selectedCategoryId === cat.id ? 'bold' : 'normal' }}>
+                {cat.name}
+              </Typography>
+              <Box className="actions" sx={{ opacity: 0, pr: 1, transition: 'opacity 0.2s' }}>
+                <IconButton size="small" onClick={() => { setEditingCategory(cat); setCategoryModalOpen(true); }}><EditIcon fontSize="small" /></IconButton>
+                <IconButton size="small" onClick={() => handleDeleteCategory(cat.id)}><DeleteIcon fontSize="small" /></IconButton>
+              </Box>
+            </Box>
+          ))}
+        </Paper>
+      </Grid>
+    );
+  };
+  
+  const renderProducts = () => (
+     <Grid item xs={12} md={isMobile ? 12 : 9}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">Produtos</Typography>
+          <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => { setEditingProduct(null); setProductModalOpen(true); }}>
+            Novo Produto
+          </Button>
+        </Box>
+        <Grid container spacing={3}>
+          {filteredProducts.map(product => (
+              <Grid item key={product.id} xs={12} sm={6} md={4}>
+                 <Box sx={{ position: 'relative', '&:hover .actions': { opacity: 1 } }}>
+                      <ProductCard product={product} />
+                      <Paper className="actions" sx={{ position: 'absolute', top: 8, right: 8, opacity: 0, transition: 'opacity 0.2s', borderRadius: '50px' }}>
+                          <Tooltip title="Editar Produto"><IconButton size="small" onClick={() => { setEditingProduct(product); setProductModalOpen(true); }}><EditIcon fontSize="small" /></IconButton></Tooltip>
+                          <Tooltip title="Ficha Técnica"><IconButton size="small" onClick={() => handleOpenRecipeModal(product)}><ReceiptLongIcon fontSize="small" /></IconButton></Tooltip>
+                          <Tooltip title="Excluir Produto"><IconButton size="small" onClick={() => handleDeleteProduct(product.id)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+                      </Paper>
+                 </Box>
+              </Grid>
+          ))}
+          </Grid>
+           {filteredProducts.length === 0 && (
+              <Paper sx={{p: 3, textAlign: 'center', width: '100%', mt: 2}}>
+                  <Typography color="text.secondary">Nenhum produto para exibir. Que tal adicionar um novo?</Typography>
+              </Paper>
+          )}
+      </Grid>
+  );
 
   if (loading) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 5 }}><CircularProgress /></Box>;
@@ -162,65 +243,17 @@ const AdminMenu = () => {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <Grid container spacing={4}>
-        <Grid item xs={12} md={3}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Categorias</Typography>
-            <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => { setEditingCategory(null); setCategoryModalOpen(true); }}>
-              Nova
-            </Button>
-          </Box>
-          <Paper elevation={2}>
-            <Box sx={{ borderBottom: '1px solid #eee' }}>
-                <Typography 
-                    onClick={() => setSelectedCategoryId(null)}
-                    sx={{ p: 2, cursor: 'pointer', fontWeight: selectedCategoryId === null ? 'bold' : 'normal', bgcolor: selectedCategoryId === null ? 'action.selected' : 'transparent' }}
-                >
-                    Todos os Produtos
-                </Typography>
-            </Box>
-            {categories.map(cat => (
-              <Box key={cat.id} sx={{ display: 'flex', alignItems: 'center', '&:hover .actions': { opacity: 1 }, borderBottom: '1px solid #eee' }}>
-                <Typography onClick={() => setSelectedCategoryId(cat.id)} sx={{ flexGrow: 1, cursor: 'pointer', p: 2, bgcolor: selectedCategoryId === cat.id ? 'action.selected' : 'transparent', fontWeight: selectedCategoryId === cat.id ? 'bold' : 'normal' }}>
-                  {cat.name}
-                </Typography>
-                <Box className="actions" sx={{ opacity: 0, pr: 1, transition: 'opacity 0.2s' }}>
-                  <IconButton size="small" onClick={() => { setEditingCategory(cat); setCategoryModalOpen(true); }}><EditIcon fontSize="small" /></IconButton>
-                  <IconButton size="small" onClick={() => handleDeleteCategory(cat.id)}><DeleteIcon fontSize="small" /></IconButton>
-                </Box>
-              </Box>
-            ))}
-          </Paper>
+      {isMobile ? (
+        <>
+          {renderCategories()}
+          {renderProducts()}
+        </>
+      ) : (
+        <Grid container spacing={4}>
+          {renderCategories()}
+          {renderProducts()}
         </Grid>
-
-        <Grid item xs={12} md={9}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Produtos</Typography>
-            <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => { setEditingProduct(null); setProductModalOpen(true); }}>
-              Novo Produto
-            </Button>
-          </Box>
-          <Grid container spacing={3}>
-            {filteredProducts.map(product => (
-                <Grid item key={product.id} xs={12} sm={6} md={4}>
-                   <Box sx={{ position: 'relative', '&:hover .actions': { opacity: 1 } }}>
-                        <ProductCard product={product} />
-                        <Paper className="actions" sx={{ position: 'absolute', top: 8, right: 8, opacity: 0, transition: 'opacity 0.2s', borderRadius: '50px' }}>
-                            <Tooltip title="Editar Produto"><IconButton size="small" onClick={() => { setEditingProduct(product); setProductModalOpen(true); }}><EditIcon fontSize="small" /></IconButton></Tooltip>
-                            <Tooltip title="Ficha Técnica"><IconButton size="small" onClick={() => handleOpenRecipeModal(product)}><ReceiptLongIcon fontSize="small" /></IconButton></Tooltip>
-                            <Tooltip title="Excluir Produto"><IconButton size="small" onClick={() => handleDeleteProduct(product.id)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
-                        </Paper>
-                   </Box>
-                </Grid>
-            ))}
-            </Grid>
-             {filteredProducts.length === 0 && (
-                <Paper sx={{p: 3, textAlign: 'center', width: '100%'}}>
-                    <Typography color="text.secondary">Nenhum produto para exibir. Que tal adicionar um novo?</Typography>
-                </Paper>
-            )}
-        </Grid>
-      </Grid>
+      )}
       
       <CategoryModal open={isCategoryModalOpen} onClose={() => setCategoryModalOpen(false)} onSave={handleSaveCategory} category={editingCategory} />
       <ProductModal open={isProductModalOpen} onClose={() => setProductModalOpen(false)} onSave={handleSaveProduct} product={editingProduct} categories={categories} />

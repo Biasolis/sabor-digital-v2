@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button,
-  FormControlLabel, Switch
+  FormControlLabel, Switch, Grid, Typography, Divider
 } from '@mui/material';
 
 const PlanModal = ({ open, onClose, onSave, plan }) => {
@@ -10,18 +10,36 @@ const PlanModal = ({ open, onClose, onSave, plan }) => {
     name: '',
     price: '',
     is_public: true,
+    features: {
+      maxUsers: 5,
+      enableReports: false,
+    }
   });
 
   useEffect(() => {
     if (open) {
-      if (isEditing) {
+      if (isEditing && plan) {
         setFormData({
           name: plan.name || '',
           price: plan.price || '',
           is_public: plan.is_public !== undefined ? plan.is_public : true,
+          // Garante que o objeto 'features' e suas chaves existam
+          features: {
+            maxUsers: plan.features?.maxUsers || 5,
+            enableReports: plan.features?.enableReports || false,
+          }
         });
       } else {
-        setFormData({ name: '', price: '', is_public: true });
+        // Reseta para os valores padrão de um novo plano
+        setFormData({
+          name: '',
+          price: '',
+          is_public: true,
+          features: {
+            maxUsers: 5,
+            enableReports: false,
+          }
+        });
       }
     }
   }, [plan, open, isEditing]);
@@ -34,7 +52,19 @@ const PlanModal = ({ open, onClose, onSave, plan }) => {
     }));
   };
 
+  const handleFeatureChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      features: {
+        ...prev.features,
+        [name]: type === 'checkbox' ? checked : parseInt(value, 10) || 0,
+      }
+    }));
+  };
+
   const handleSave = () => {
+    // A API já espera receber o objeto 'features'
     onSave({ ...formData, id: plan?.id });
   };
 
@@ -42,39 +72,72 @@ const PlanModal = ({ open, onClose, onSave, plan }) => {
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>{isEditing ? 'Editar Plano' : 'Criar Novo Plano'}</DialogTitle>
       <DialogContent>
-        <TextField
-          autoFocus
-          margin="dense"
-          name="name"
-          label="Nome do Plano"
-          fullWidth
-          variant="outlined"
-          value={formData.name}
-          onChange={handleChange}
-        />
-        <TextField
-          margin="dense"
-          name="price"
-          label="Preço Mensal (ex: 49.90)"
-          type="number"
-          fullWidth
-          variant="outlined"
-          value={formData.price}
-          onChange={handleChange}
-        />
-        <FormControlLabel
-          control={
-            <Switch
-              checked={formData.is_public}
+        <Grid container spacing={2} sx={{ mt: 1 }}>
+          <Grid item xs={12}>
+            <TextField
+              autoFocus
+              name="name"
+              label="Nome do Plano"
+              fullWidth
+              variant="outlined"
+              value={formData.name}
               onChange={handleChange}
-              name="is_public"
             />
-          }
-          label="Plano Visível Publicamente"
-          sx={{ mt: 1 }}
-        />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              name="price"
+              label="Preço Mensal (ex: 49.90)"
+              type="number"
+              fullWidth
+              variant="outlined"
+              value={formData.price}
+              onChange={handleChange}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formData.is_public}
+                  onChange={handleChange}
+                  name="is_public"
+                />
+              }
+              label="Plano Visível Publicamente"
+            />
+          </Grid>
+
+          <Grid item xs={12}>
+            <Divider sx={{ my: 1 }}><Typography>Funcionalidades do Plano</Typography></Divider>
+          </Grid>
+
+          <Grid item xs={12}>
+            <TextField
+              name="maxUsers"
+              label="Número Máximo de Usuários"
+              type="number"
+              fullWidth
+              variant="outlined"
+              value={formData.features.maxUsers}
+              onChange={handleFeatureChange}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formData.features.enableReports}
+                  onChange={handleFeatureChange}
+                  name="enableReports"
+                />
+              }
+              label="Acesso aos Relatórios Gerenciais"
+            />
+          </Grid>
+        </Grid>
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ p: 2 }}>
         <Button onClick={onClose}>Cancelar</Button>
         <Button onClick={handleSave} variant="contained">Salvar Plano</Button>
       </DialogActions>

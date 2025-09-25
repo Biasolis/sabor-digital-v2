@@ -15,6 +15,7 @@ import HourglassTopIcon from '@mui/icons-material/HourglassTop';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 import StatCard from './components/StatCard';
+import SalesChart from './components/SalesChart'; // 1. Importar o novo componente de gráfico
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -65,6 +66,7 @@ const Dashboard = () => {
         Olá, {user?.name}! Aqui está um resumo do seu dia.
       </Typography>
 
+      {/* Cards de Estatísticas */}
       <Grid container spacing={3}>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
@@ -100,7 +102,14 @@ const Dashboard = () => {
         </Grid>
       </Grid>
 
-      {/* Futuramente, esta área pode conter gráficos de vendas, produtos mais vendidos, etc. */}
+      {/* 2. Seção do Gráfico */}
+      <Box sx={{ mt: 4 }}>
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            {stats?.salesLast7Days && <SalesChart data={stats.salesLast7Days} />}
+          </Grid>
+        </Grid>
+      </Box>
     </Container>
   );
 };

@@ -18,7 +18,8 @@ import planRoutes from './routes/planRoutes.js';
 import superAdminDashboardRoutes from './routes/superAdminDashboardRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import customerRoutes from './routes/customerRoutes.js';
-import customerAuthRoutes from './routes/customerAuthRoutes.js'; // 1. Nova importação
+import customerAuthRoutes from './routes/customerAuthRoutes.js';
+import superAdminReportRoutes from './routes/superAdminReportRoutes.js'; // 1. Nova importação
 
 await testConnection();
 
@@ -38,9 +39,10 @@ app.get('/', (req, res) => {
 // Rotas da Aplicação
 app.use('/api/superadmin', superadminRoutes);
 app.use('/api/superadmin/dashboard', superAdminDashboardRoutes);
+app.use('/api/superadmin/reports', superAdminReportRoutes); // 2. Nova rota
 app.use('/api/tenants', tenantRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/customer/auth', customerAuthRoutes); // 2. Nova rota para autenticação de clientes
+app.use('/api/customer/auth', customerAuthRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/categories', categoryRoutes);

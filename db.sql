@@ -23,12 +23,15 @@ CREATE TABLE tenants (
     subdomain VARCHAR(100) NOT NULL UNIQUE,
     status VARCHAR(50) NOT NULL DEFAULT 'active',
     plan_id UUID NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     logo_url VARCHAR(255),
     primary_color VARCHAR(7),
     secondary_color VARCHAR(7),
     is_open BOOLEAN NOT NULL DEFAULT true,
+    -- NOVOS CAMPOS PARA INTEGRAÇÃO TICKET-Z
+    ticketz_api_url VARCHAR(255),
+    ticketz_api_token TEXT, -- Usando TEXT para tokens longos
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_plan FOREIGN KEY(plan_id) REFERENCES plans(id)
 );
 
@@ -109,8 +112,7 @@ CREATE TABLE customers (
     birth_date DATE,
     email VARCHAR(255),
     phone VARCHAR(50) NOT NULL,
-    password_hash VARCHAR(255), -- NOVO CAMPO: Senha para login do cliente
-    -- Campos de endereço
+    password_hash VARCHAR(255),
     address_street VARCHAR(255),
     address_number VARCHAR(50),
     address_complement VARCHAR(100),
@@ -118,7 +120,6 @@ CREATE TABLE customers (
     address_city VARCHAR(100),
     address_state VARCHAR(50),
     address_zip_code VARCHAR(10),
-    -- Campos de consentimento
     accepts_email_marketing BOOLEAN DEFAULT false,
     accepts_whatsapp_marketing BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -126,7 +127,6 @@ CREATE TABLE customers (
     CONSTRAINT fk_tenant FOREIGN KEY(tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
     UNIQUE(tenant_id, phone)
 );
-
 
 -- Tipos ENUM para pedidos e transações
 CREATE TYPE order_status AS ENUM ('pending', 'in_progress', 'ready', 'delivered', 'canceled', 'paid');

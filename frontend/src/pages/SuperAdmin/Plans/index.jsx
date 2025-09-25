@@ -99,6 +99,8 @@ const PlansPage = () => {
               <TableRow>
                 <TableCell>Nome do Plano</TableCell>
                 <TableCell align="right">Preço Mensal</TableCell>
+                <TableCell align="center">Max. Usuários</TableCell> {/* NOVA COLUNA */}
+                <TableCell align="center">Relatórios</TableCell> {/* NOVA COLUNA */}
                 <TableCell>Público</TableCell>
                 <TableCell align="center">Ações</TableCell>
               </TableRow>
@@ -108,6 +110,9 @@ const PlansPage = () => {
                 <TableRow hover key={plan.id}>
                   <TableCell>{plan.name}</TableCell>
                   <TableCell align="right">{formatCurrency(plan.price)}</TableCell>
+                  {/* NOVAS CÉLULAS */}
+                  <TableCell align="center">{plan.features?.maxUsers || 'N/A'}</TableCell>
+                  <TableCell align="center">{plan.features?.enableReports ? 'Sim' : 'Não'}</TableCell>
                   <TableCell>{plan.is_public ? 'Sim' : 'Não'}</TableCell>
                   <TableCell align="center">
                     <Tooltip title="Editar Plano"><IconButton onClick={() => handleOpenModal(plan)}><EditIcon /></IconButton></Tooltip>

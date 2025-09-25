@@ -5,6 +5,8 @@ import {
   Box, Drawer, AppBar, Toolbar, Typography, List, ListItem, ListItemButton,
   ListItemIcon, ListItemText, CssBaseline, Divider, Chip,
 } from '@mui/material';
+
+// Importação de todos os ícones necessários
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
@@ -16,10 +18,32 @@ import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import BadgeIcon from '@mui/icons-material/Badge'; // Ícone para Clientes
+import BadgeIcon from '@mui/icons-material/Badge';
+import ListAltIcon from '@mui/icons-material/ListAlt';
 import api from '../services/api';
 
 const drawerWidth = 240;
+
+// Objeto que define todos os itens de menu possíveis
+const allMenuItems = {
+  // Menus Operacionais
+  dashboard: { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard', roles: ['admin', 'caixa'] },
+  pdv: { text: 'PDV', icon: <PointOfSaleIcon />, path: '/pdv', roles: ['admin', 'caixa', 'garcom'] },
+  kitchen: { text: 'Cozinha', icon: <SoupKitchenIcon />, path: '/kitchen', roles: ['admin', 'cozinha'] },
+  cashier: { text: 'Caixa', icon: <AttachMoneyIcon />, path: '/cashier', roles: ['admin', 'caixa'] },
+  
+  // Menus de Gerenciamento (Admin)
+  divider: { isDivider: true, roles: ['admin'] },
+  orders: { text: 'Pedidos', icon: <ListAltIcon />, path: '/orders', roles: ['admin', 'caixa'] },
+  reports: { text: 'Relatórios', icon: <AssessmentIcon />, path: '/reports', roles: ['admin'] },
+  menu: { text: 'Cardápio', icon: <RestaurantMenuIcon />, path: '/admin/menu', roles: ['admin'] },
+  customers: { text: 'Clientes', icon: <BadgeIcon />, path: '/customers', roles: ['admin'] },
+  inventory: { text: 'Estoque', icon: <InventoryIcon />, path: '/admin/inventory', roles: ['admin'] },
+  tables: { text: 'Mesas', icon: <TableRestaurantIcon />, path: '/admin/tables', roles: ['admin'] },
+  users: { text: 'Usuários', icon: <PeopleIcon />, path: '/users', roles: ['admin'] },
+  settings: { text: 'Configurações', icon: <SettingsIcon />, path: '/settings', roles: ['admin'] },
+};
+
 
 const MainLayout = () => {
   const { user, logout } = useAuth();
@@ -42,25 +66,10 @@ const MainLayout = () => {
     fetchTenantInfo();
   }, []);
 
-  const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-    { text: 'PDV', icon: <PointOfSaleIcon />, path: '/pdv' },
-    { text: 'Cozinha', icon: <SoupKitchenIcon />, path: '/kitchen' },
-    { text: 'Caixa', icon: <AttachMoneyIcon />, path: '/cashier' },
-  ];
-
-  const adminMenuItems = [
-    { isDivider: true },
-    { text: 'Relatórios', icon: <AssessmentIcon />, path: '/reports' },
-    { text: 'Cardápio', icon: <RestaurantMenuIcon />, path: '/admin/menu' },
-    { text: 'Clientes', icon: <BadgeIcon />, path: '/customers' }, // 3. Novo item de menu
-    { text: 'Estoque', icon: <InventoryIcon />, path: '/admin/inventory' },
-    { text: 'Mesas', icon: <TableRestaurantIcon />, path: '/admin/tables' },
-    { text: 'Usuários', icon: <PeopleIcon />, path: '/users' },
-    { text: 'Configurações', icon: <SettingsIcon />, path: '/settings' },
-  ];
-  
-  const finalMenuItems = user?.role === 'admin' ? [...menuItems, ...adminMenuItems] : menuItems;
+  // Filtra os itens de menu com base na função (role) do usuário logado
+  const visibleMenuItems = Object.values(allMenuItems).filter(item => 
+    item.roles.includes(user?.role)
+  );
 
   const drawer = (
     <div>
@@ -70,7 +79,7 @@ const MainLayout = () => {
       </Toolbar>
       <Divider />
       <List>
-        {finalMenuItems.map((item, index) => (
+        {visibleMenuItems.map((item, index) => (
           item.isDivider ? <Divider key={`divider-${index}`} sx={{ my: 1 }} /> :
           <ListItem key={item.text} disablePadding>
             <ListItemButton onClick={() => navigate(item.path)}>

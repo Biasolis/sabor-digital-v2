@@ -18,6 +18,7 @@ import ReceiptPage from '../pages/Receipt';
 import SettingsPage from '../pages/Settings';
 import ReportsPage from '../pages/Reports';
 import CustomersPage from '../pages/Customers';
+import OrdersPage from '../pages/Orders';
 
 // Rotas de Super Admin
 import SuperAdminLayout from '../layout/SuperAdminLayout';
@@ -25,12 +26,13 @@ import SuperAdminLogin from '../pages/SuperAdmin/Login';
 import SuperAdminDashboard from '../pages/SuperAdmin/Dashboard';
 import TenantsPage from '../pages/SuperAdmin/Tenants';
 import PlansPage from '../pages/SuperAdmin/Plans';
+import SuperAdminReports from '../pages/SuperAdmin/Reports/index.jsx';
 
-// Rotas Públicas e de Clientes (CAMINHOS CORRIGIDOS)
+// Rotas Públicas e de Clientes
 import Menu from '../pages/Menu';
-import CustomerLogin from '../pages/Customer/Login/index.jsx';
-import CustomerRegister from '../pages/Customer/Register/index.jsx';
-import MyOrderPage from '../pages/Customer/MyOrder/index.jsx';
+import CustomerLogin from '../pages/Customers/Login/index.jsx';
+import CustomerRegister from '../pages/Customers/Register/index.jsx';
+import MyOrderPage from '../pages/Customers/MyOrder/index.jsx';
 import CustomerPrivateRoute from './CustomerPrivateRoute.jsx';
 
 
@@ -66,16 +68,19 @@ const AppRoutes = () => {
       <Route path="/login" element={<Login />} />
       
       {/* Rotas de Super Admin */}
+      <Route path="/superadmin/login" element={<SuperAdminLogin />} />
       <Route element={<PrivateRoute><SuperAdminLayout /></PrivateRoute>}>
         <Route path="/superadmin/dashboard" element={<SuperAdminDashboard />} />
         <Route path="/superadmin/tenants" element={<TenantsPage />} />
         <Route path="/superadmin/plans" element={<PlansPage />} />
+        <Route path="/superadmin/reports" element={<SuperAdminReports />} />
       </Route>
 
       {/* Rotas de Funcionários (Tenant) */}
       <Route element={<PrivateRoute><MainLayout /></PrivateRoute>}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/orders" element={<OrdersPage />} />
         <Route path="/admin/menu" element={<AdminMenu />} />
         <Route path="/admin/tables" element={<TablePage />} />
         <Route path="/admin/inventory" element={<InventoryPage />} />
@@ -85,7 +90,6 @@ const AppRoutes = () => {
         <Route path="/users" element={<UsersPage />} />
         <Route path="/cashier" element={<CashierPage />} />
         <Route path="/settings" element={<SettingsPage />} />
-        {/* Rotas sem layout principal, mas ainda protegidas */}
         <Route path="/order/:orderId" element={<OrderDetailPage />} />
         <Route path="/receipt/:orderId" element={<ReceiptPage />} />
       </Route>
