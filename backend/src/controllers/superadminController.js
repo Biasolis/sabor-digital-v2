@@ -1,64 +1,235 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import db from '../database/db.js';
-import 'dotenv/config';
+import { uploadFile } from '../lib/s3.js';
 
-export const login = async (req, res) => {
-  const { email, password } = req.body;
+// Função para o Super Admin criar um novo tenant
+export const createTenant = async (req, res) => {
+  const { 
+    name, subdomain, plan_id, admin_name, admin_email, admin_password,
+    ticketz_api_url, ticketz_api_token 
+  } = req.body;
+  const superAdminId = req.user.id; // ID do superadmin que está criando
 
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email e senha são obrigatórios.' });
+  if (!name || !subdomain || !plan_id || !admin_name || !admin_email || !admin_password) {
+    return res.status(400).json({ message: 'Todos os campos são obrigatórios.' });
   }
 
+  const client = await db.pool.connect();
+
   try {
-    const result = await db.query('SELECT * FROM superadmins WHERE email = $1', [email]);
-    const superadmin = result.rows[0];
+    await client.query('BEGIN');
 
-    if (!superadmin) {
-      return res.status(401).json({ message: 'Credenciais inválidas.' });
+    // Verifica se o subdomínio já está em uso
+    const existingTenant = await client.query('SELECT id FROM tenants WHERE subdomain = $1', [subdomain]);
+    if (existingTenant.rows.length > 0) {
+      throw new Error('Este subdomínio já está em uso.');
     }
 
-    const isPasswordCorrect = await bcrypt.compare(password, superadmin.password_hash);
+    // Cria o tenant
+    const tenantQuery = `
+      INSERT INTO tenants (name, subdomain, plan_id, ticketz_api_url, ticketz_api_token) 
+      VALUES ($1, $2, $3, $4, $5) 
+      RETURNING id;
+    `;
+    const tenantResult = await client.query(tenantQuery, [name, subdomain, plan_id, ticketz_api_url, ticketz_api_token]);
+    const newTenantId = tenantResult.rows[0].id;
 
-    if (!isPasswordCorrect) {
-      return res.status(401).json({ message: 'Credenciais inválidas.' });
-    }
+    // Cria o usuário administrador do tenant
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(admin_password, salt);
+    const userQuery = `
+      INSERT INTO users (tenant_id, name, email, password_hash, role)
+      VALUES ($1, $2, $3, $4, 'admin');
+    `;
+    await client.query(userQuery, [newTenantId, admin_name, admin_email, password_hash]);
 
-    const token = jwt.sign(
-      { 
-        id: superadmin.id,
-        email: superadmin.email,
-        role: 'superadmin'
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: '8h'
-      }
-    );
+    // Busca os dados do Super Admin para replicá-lo como usuário de sistema
+    const superAdminResult = await client.query('SELECT name, email, password_hash FROM superadmins WHERE id = $1', [superAdminId]);
+    const superAdmin = superAdminResult.rows[0];
+    
+    // Cria o usuário de sistema (Super Admin) dentro do novo tenant
+    const systemUserQuery = `
+      INSERT INTO users (tenant_id, name, email, password_hash, role, is_system_user)
+      VALUES ($1, $2, $3, $4, 'admin', true);
+    `;
+    await client.query(systemUserQuery, [newTenantId, superAdmin.name, superAdmin.email, superAdmin.password_hash]);
 
-    res.status(200).json({
-      message: 'Login bem-sucedido!',
-      token: token,
-      user: {
-        id: superadmin.id,
-        name: superadmin.name,
-        email: superadmin.email
-      }
+    await client.query('COMMIT');
+
+    res.status(201).json({ 
+      message: 'Tenant e usuários criados com sucesso!',
+      tenant_id: newTenantId 
     });
 
   } catch (error) {
-    console.error('Erro no login do Super Admin:', error);
+    await client.query('ROLLBACK');
+    console.error('Erro ao criar tenant:', error);
+    if (error.message.includes('subdomínio') || (error.code === '23505' && error.constraint === 'users_email_tenant_id_key')) {
+        return res.status(409).json({ message: error.message });
+    }
+    res.status(500).json({ message: 'Erro interno do servidor ao criar o tenant.' });
+  } finally {
+    client.release();
+  }
+};
+
+// ... (o restante do arquivo permanece o mesmo)
+// Para o Super Admin listar todos os tenants
+export const listTenants = async (req, res) => {
+    // ALTERADO: Adicionado plan_id para exibição no frontend
+    try {
+        const query = 'SELECT id, name, subdomain, status, plan_id, created_at FROM tenants ORDER BY created_at DESC;';
+        const result = await db.query(query);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('Erro ao listar tenants:', error);
+        res.status(500).json({ message: 'Erro interno do servidor.' });
+    }
+};
+
+// Para o Super Admin atualizar um tenant específico
+export const updateTenant = async (req, res) => {
+    const { id } = req.params;
+    const { 
+      name, subdomain, status, plan_id, 
+      ticketz_api_url, ticketz_api_token 
+    } = req.body;
+
+    if (!name || !subdomain || !status || !plan_id) {
+        return res.status(400).json({ message: 'Nome, subdomínio, plano e status são obrigatórios.' });
+    }
+
+    try {
+        const query = `
+            UPDATE tenants 
+            SET name = $1, subdomain = $2, status = $3, plan_id = $4, 
+                ticketz_api_url = $5, ticketz_api_token = $6, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $7
+            RETURNING *;
+        `;
+        const result = await db.query(query, [name, subdomain, status, plan_id, ticketz_api_url, ticketz_api_token, id]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Cliente (tenant) não encontrado.' });
+        }
+        
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        if (error.code === '23505') {
+            return res.status(409).json({ message: 'Este subdomínio já está em uso por outro cliente.' });
+        }
+        console.error('Erro ao atualizar tenant:', error);
+        res.status(500).json({ message: 'Erro interno do servidor.' });
+    }
+};
+
+// NOVA FUNÇÃO: Para o Super Admin deletar um tenant
+export const deleteTenant = async (req, res) => {
+  const { id } = req.params;
+  try {
+    // A opção ON DELETE CASCADE na tabela 'users' garantirá que os usuários sejam removidos junto com o tenant.
+    const result = await db.query('DELETE FROM tenants WHERE id = $1', [id]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Cliente (tenant) não encontrado.' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Erro ao deletar tenant:', error);
     res.status(500).json({ message: 'Erro interno do servidor.' });
   }
 };
 
-// Nova função para obter dados do usuário logado
-export const getMe = async (req, res) => {
-  // Os dados do usuário foram anexados em req.user pelo middleware 'protect'
-  const { id, email, role } = req.user;
-  res.status(200).json({
-    id,
-    email,
-    role
-  });
+
+// Para o usuário logado (admin da loja) buscar os dados do seu próprio tenant
+export const getMyTenant = async (req, res) => {
+  const tenantId = req.user.tenant_id;
+
+  try {
+    const query = `
+      SELECT id, name, subdomain, status, created_at, logo_url, 
+             primary_color, secondary_color, is_open,
+             ticketz_api_url, ticketz_api_token 
+      FROM tenants 
+      WHERE id = $1;
+    `;
+    const result = await db.query(query, [tenantId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Tenant não encontrado.' });
+    }
+
+    res.status(200).json(result.rows[0]);
+  } catch (error) {
+    console.error('Erro ao buscar dados do tenant:', error);
+    res.status(500).json({ message: 'Erro interno do servidor.' });
+  }
+};
+
+// Para o admin do tenant atualizar suas configurações
+export const updateMyTenant = async (req, res) => {
+    const tenantId = req.user.tenant_id;
+    const is_open = req.body.is_open === 'true'; 
+    const { name, primary_color, secondary_color, ticketz_api_url, ticketz_api_token } = req.body;
+    let logo_url;
+
+    try {
+        if (req.file) {
+            const { buffer, mimetype } = req.file;
+            logo_url = await uploadFile(buffer, mimetype, tenantId);
+        }
+
+        const currentTenant = await db.query('SELECT logo_url FROM tenants WHERE id = $1', [tenantId]);
+        
+        const query = `
+            UPDATE tenants SET
+                name = $1,
+                primary_color = $2,
+                secondary_color = $3,
+                logo_url = $4,
+                is_open = $5,
+                ticketz_api_url = $6,
+                ticketz_api_token = $7,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $8
+            RETURNING *;
+        `;
+        
+        const params = [
+            name,
+            primary_color,
+            secondary_color,
+            logo_url || currentTenant.rows[0].logo_url,
+            is_open,
+            ticketz_api_url,
+            ticketz_api_token,
+            tenantId
+        ];
+        
+        const result = await db.query(query, params);
+        res.status(200).json(result.rows[0]);
+
+    } catch (error) {
+        console.error('Erro ao atualizar configurações do tenant:', error);
+        res.status(500).json({ message: 'Erro interno do servidor.' });
+    }
+};
+
+// Retorna dados públicos de um tenant para o cardápio
+export const getPublicTenantInfo = async (req, res) => {
+    const { id } = req.tenant;
+    try {
+        const query = `
+            SELECT name, logo_url, primary_color, secondary_color, is_open
+            FROM tenants
+            WHERE id = $1;
+        `;
+        const result = await db.query(query, [id]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Informações da loja não encontradas.' });
+        }
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        console.error('Erro ao buscar informações públicas do tenant:', error);
+        res.status(500).json({ message: 'Erro interno do servidor.' });
+    }
 };

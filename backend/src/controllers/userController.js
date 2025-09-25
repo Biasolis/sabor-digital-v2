@@ -47,8 +47,12 @@ export const listUsers = async (req, res) => {
   const tenantId = req.user.tenant_id;
 
   try {
+    // MODIFICADO: Adicionado "is_system_user = false" para ocultar o superadmin
     const query = `
-      SELECT id, name, email, role, created_at FROM users WHERE tenant_id = $1 ORDER BY name;
+      SELECT id, name, email, role, created_at 
+      FROM users 
+      WHERE tenant_id = $1 AND is_system_user = false 
+      ORDER BY name;
     `;
     const result = await db.query(query, [tenantId]);
     res.status(200).json(result.rows);
@@ -58,4 +62,51 @@ export const listUsers = async (req, res) => {
   }
 };
 
-// Adicione aqui futuramente as funções de Update e Delete
+// NOVA FUNÇÃO: Atualizar um usuário
+export const updateUser = async (req, res) => {
+    const { id: userId } = req.params;
+    const { name, email, role, password } = req.body;
+    const { tenant_id } = req.user;
+
+    if (!name || !email || !role) {
+        return res.status(400).json({ message: 'Nome, email e função são obrigatórios.' });
+    }
+
+    try {
+        let password_hash;
+        if (password) {
+            const salt = await bcrypt.genSalt(10);
+            password_hash = await bcrypt.hash(password, salt);
+        }
+
+        const currentUser = await db.query('SELECT password_hash FROM users WHERE id = $1 AND tenant_id = $2', [userId, tenant_id]);
+        if(currentUser.rowCount === 0) {
+            return res.status(404).json({ message: 'Usuário não encontrado.' });
+        }
+
+        const query = `
+            UPDATE users SET
+                name = $1,
+                email = $2,
+                role = $3,
+                password_hash = $4,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $5 AND tenant_id = $6 AND is_system_user = false
+            RETURNING id, name, email, role;
+        `;
+
+        const result = await db.query(query, [name, email, role, password_hash || currentUser.rows[0].password_hash, userId, tenant_id]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Usuário não encontrado ou é um usuário de sistema.' });
+        }
+        
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        if (error.code === '23505') { // unique_violation
+            return res.status(409).json({ message: 'Este e-mail já está em uso por outro usuário.' });
+        }
+        console.error('Erro ao atualizar usuário:', error);
+        res.status(500).json({ message: 'Erro interno do servidor.' });
+    }
+};

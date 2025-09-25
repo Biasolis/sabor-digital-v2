@@ -17,7 +17,14 @@ import { toast } from 'react-toastify';
 import api from '../../services/api';
 
 const SettingsPage = () => {
-  const [formData, setFormData] = useState({ name: '', primary_color: '#000000', secondary_color: '#000000', is_open: true });
+  const [formData, setFormData] = useState({
+    name: '',
+    primary_color: '#000000',
+    secondary_color: '#000000',
+    is_open: true,
+    ticketz_api_url: '',
+    ticketz_api_token: '',
+  });
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState('');
   const [loading, setLoading] = useState(true);
@@ -33,6 +40,8 @@ const SettingsPage = () => {
           primary_color: data.primary_color || '#1976d2',
           secondary_color: data.secondary_color || '#9c27b0',
           is_open: data.is_open !== undefined ? data.is_open : true,
+          ticketz_api_url: data.ticketz_api_url || '',
+          ticketz_api_token: data.ticketz_api_token || '',
         });
         setLogoPreview(data.logo_url);
       })
@@ -66,6 +75,8 @@ const SettingsPage = () => {
     data.append('primary_color', formData.primary_color);
     data.append('secondary_color', formData.secondary_color);
     data.append('is_open', formData.is_open);
+    data.append('ticketz_api_url', formData.ticketz_api_url);
+    data.append('ticketz_api_token', formData.ticketz_api_token);
     if (logoFile) {
       data.append('logo', logoFile);
     }
@@ -150,6 +161,31 @@ const SettingsPage = () => {
               </Button>
             </Box>
           </Grid>
+
+          <Grid item xs={12}><Divider sx={{ my: 2 }}><Typography>Integração com Ticket-z</Typography></Divider></Grid>
+          
+          <Grid item xs={12}>
+            <TextField 
+              fullWidth 
+              label="URL da API do Ticket-z" 
+              name="ticketz_api_url" 
+              value={formData.ticketz_api_url} 
+              onChange={handleInputChange} 
+              helperText="Exemplo: http://seu-ticketz.com"
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField 
+              fullWidth 
+              label="Token da API do Ticket-z" 
+              name="ticketz_api_token" 
+              value={formData.ticketz_api_token} 
+              onChange={handleInputChange} 
+              type="password"
+              helperText="Seu token de acesso para enviar mensagens."
+            />
+          </Grid>
+
           <Grid item xs={12} sx={{ textAlign: 'right', mt: 2 }}>
             <Button variant="contained" onClick={handleSave} disabled={saving}>
               {saving ? <CircularProgress size={24} /> : 'Salvar Alterações'}

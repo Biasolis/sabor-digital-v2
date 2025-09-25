@@ -13,8 +13,11 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 import UserModal from './components/UserModal';
@@ -24,6 +27,7 @@ const UsersPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isModalOpen, setModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -43,17 +47,35 @@ const UsersPage = () => {
     fetchUsers();
   }, [fetchUsers]);
 
-  const handleSaveUser = async (userData) => {
-    try {
-        await api.post('/users', userData);
-        toast.success('Usuário criado com sucesso!');
-        setModalOpen(false);
-        fetchUsers(); // Recarrega a lista
-    } catch (error) {
-        toast.error(error.response?.data?.message || 'Erro ao criar usuário.');
-    }
+  const handleOpenModal = (user = null) => {
+    setEditingUser(user);
+    setModalOpen(true);
   };
 
+  const handleCloseModal = () => {
+    setEditingUser(null);
+    setModalOpen(false);
+  };
+
+  const handleSaveUser = async (userData) => {
+    const isEditing = !!userData.id;
+    const method = isEditing ? 'put' : 'post';
+    const endpoint = isEditing ? `/users/${userData.id}` : '/users';
+    
+    // Remove o campo de senha se estiver vazio durante a edição
+    if (isEditing && !userData.password) {
+        delete userData.password;
+    }
+
+    try {
+        await api[method](endpoint, userData);
+        toast.success(`Usuário ${isEditing ? 'atualizado' : 'criado'} com sucesso!`);
+        handleCloseModal();
+        fetchUsers();
+    } catch (error) {
+        toast.error(error.response?.data?.message || 'Erro ao salvar usuário.');
+    }
+  };
 
   if (loading) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 5 }}><CircularProgress /></Box>;
@@ -65,7 +87,7 @@ const UsersPage = () => {
         <Typography variant="h4" component="h1">
           Gerenciamento de Usuários
         </Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setModalOpen(true)}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenModal()}>
           Novo Usuário
         </Button>
       </Box>
@@ -81,6 +103,7 @@ const UsersPage = () => {
                 <TableCell>Email</TableCell>
                 <TableCell>Função</TableCell>
                 <TableCell>Data de Criação</TableCell>
+                <TableCell align="center">Ações</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -91,6 +114,13 @@ const UsersPage = () => {
                   <TableCell sx={{ textTransform: 'capitalize' }}>{user.role}</TableCell>
                   <TableCell>
                     {new Date(user.created_at).toLocaleDateString('pt-BR')}
+                  </TableCell>
+                  <TableCell align="center">
+                    <Tooltip title="Editar">
+                      <IconButton onClick={() => handleOpenModal(user)}>
+                        <EditIcon />
+                      </IconButton>
+                    </Tooltip>
                   </TableCell>
                 </TableRow>
               ))}
@@ -106,8 +136,9 @@ const UsersPage = () => {
       
       <UserModal 
         open={isModalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={handleCloseModal}
         onSave={handleSaveUser}
+        user={editingUser}
       />
     </Container>
   );

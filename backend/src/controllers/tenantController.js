@@ -4,7 +4,10 @@ import { uploadFile } from '../lib/s3.js';
 
 // Função para o Super Admin criar um novo tenant
 export const createTenant = async (req, res) => {
-  const { name, subdomain, plan_id, admin_name, admin_email, admin_password } = req.body;
+  const { 
+    name, subdomain, plan_id, admin_name, admin_email, admin_password,
+    ticketz_api_url, ticketz_api_token 
+  } = req.body;
 
   if (!name || !subdomain || !plan_id || !admin_name || !admin_email || !admin_password) {
     return res.status(400).json({ message: 'Todos os campos são obrigatórios.' });
@@ -21,11 +24,11 @@ export const createTenant = async (req, res) => {
     }
 
     const tenantQuery = `
-      INSERT INTO tenants (name, subdomain, plan_id) 
-      VALUES ($1, $2, $3) 
+      INSERT INTO tenants (name, subdomain, plan_id, ticketz_api_url, ticketz_api_token) 
+      VALUES ($1, $2, $3, $4, $5) 
       RETURNING id;
     `;
-    const tenantResult = await client.query(tenantQuery, [name, subdomain, plan_id]);
+    const tenantResult = await client.query(tenantQuery, [name, subdomain, plan_id, ticketz_api_url, ticketz_api_token]);
     const newTenantId = tenantResult.rows[0].id;
 
     const salt = await bcrypt.genSalt(10);
@@ -72,8 +75,10 @@ export const listTenants = async (req, res) => {
 // Para o Super Admin atualizar um tenant específico
 export const updateTenant = async (req, res) => {
     const { id } = req.params;
-    // ALTERADO: Adicionado plan_id para permitir a alteração
-    const { name, subdomain, status, plan_id } = req.body;
+    const { 
+      name, subdomain, status, plan_id, 
+      ticketz_api_url, ticketz_api_token 
+    } = req.body;
 
     if (!name || !subdomain || !status || !plan_id) {
         return res.status(400).json({ message: 'Nome, subdomínio, plano e status são obrigatórios.' });
@@ -82,11 +87,12 @@ export const updateTenant = async (req, res) => {
     try {
         const query = `
             UPDATE tenants 
-            SET name = $1, subdomain = $2, status = $3, plan_id = $4, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $5
+            SET name = $1, subdomain = $2, status = $3, plan_id = $4, 
+                ticketz_api_url = $5, ticketz_api_token = $6, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $7
             RETURNING *;
         `;
-        const result = await db.query(query, [name, subdomain, status, plan_id, id]);
+        const result = await db.query(query, [name, subdomain, status, plan_id, ticketz_api_url, ticketz_api_token, id]);
         
         if (result.rowCount === 0) {
             return res.status(404).json({ message: 'Cliente (tenant) não encontrado.' });
@@ -126,7 +132,8 @@ export const getMyTenant = async (req, res) => {
   try {
     const query = `
       SELECT id, name, subdomain, status, created_at, logo_url, 
-             primary_color, secondary_color, is_open 
+             primary_color, secondary_color, is_open,
+             ticketz_api_url, ticketz_api_token 
       FROM tenants 
       WHERE id = $1;
     `;
@@ -147,7 +154,7 @@ export const getMyTenant = async (req, res) => {
 export const updateMyTenant = async (req, res) => {
     const tenantId = req.user.tenant_id;
     const is_open = req.body.is_open === 'true'; 
-    const { name, primary_color, secondary_color } = req.body;
+    const { name, primary_color, secondary_color, ticketz_api_url, ticketz_api_token } = req.body;
     let logo_url;
 
     try {
@@ -165,9 +172,11 @@ export const updateMyTenant = async (req, res) => {
                 secondary_color = $3,
                 logo_url = $4,
                 is_open = $5,
+                ticketz_api_url = $6,
+                ticketz_api_token = $7,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = $6
-            RETURNING id, name, logo_url, primary_color, secondary_color, is_open;
+            WHERE id = $8
+            RETURNING *;
         `;
         
         const params = [
@@ -176,6 +185,8 @@ export const updateMyTenant = async (req, res) => {
             secondary_color,
             logo_url || currentTenant.rows[0].logo_url,
             is_open,
+            ticketz_api_url,
+            ticketz_api_token,
             tenantId
         ];
         

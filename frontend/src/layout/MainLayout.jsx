@@ -3,8 +3,9 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Box, Drawer, AppBar, Toolbar, Typography, List, ListItem, ListItemButton,
-  ListItemIcon, ListItemText, CssBaseline, Divider, Chip,
+  ListItemIcon, ListItemText, CssBaseline, Divider, Chip, Button,
 } from '@mui/material';
+import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 
 // Importação de todos os ícones necessários
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -44,11 +45,35 @@ const allMenuItems = {
   settings: { text: 'Configurações', icon: <SettingsIcon />, path: '/settings', roles: ['admin'] },
 };
 
+// NOVO COMPONENTE: Banner para o modo de acesso
+const ImpersonationBanner = () => {
+    const { stopImpersonation } = useAuth();
+    return (
+        <AppBar position="fixed" color="warning" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+            <Toolbar variant="dense" sx={{ justifyContent: 'center' }}>
+                <Typography sx={{ mr: 2 }}>Você está acessando como cliente.</Typography>
+                <Button 
+                    color="inherit" 
+                    variant="outlined" 
+                    size="small" 
+                    startIcon={<ExitToAppIcon />}
+                    onClick={stopImpersonation}
+                >
+                    Retornar ao Super Admin
+                </Button>
+            </Toolbar>
+        </AppBar>
+    );
+};
+
 
 const MainLayout = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [tenantInfo, setTenantInfo] = useState({ name: 'Carregando...', is_open: true });
+  
+  // Verifica se o token do superadmin existe para mostrar o banner
+  const isImpersonating = !!localStorage.getItem('@SaborDigital:superadmin_token');
 
   useEffect(() => {
     const fetchTenantInfo = async () => {
@@ -104,7 +129,16 @@ const MainLayout = () => {
   return (
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
-      <AppBar position="fixed" sx={{ width: `calc(100% - ${drawerWidth}px)`, ml: `${drawerWidth}px` }}>
+      {isImpersonating && <ImpersonationBanner />}
+      <AppBar 
+        position="fixed" 
+        sx={{ 
+          width: `calc(100% - ${drawerWidth}px)`, 
+          ml: `${drawerWidth}px`,
+          // Se estiver no modo de acesso, desloca a barra para baixo
+          ...(isImpersonating && { mt: '48px' }),
+        }}
+      >
         <Toolbar>
           <Typography variant="h6" noWrap component="div">Olá, {user?.name}</Typography>
         </Toolbar>
@@ -118,6 +152,8 @@ const MainLayout = () => {
       </Drawer>
       <Box component="main" sx={{ flexGrow: 1, bgcolor: 'background.default', p: 3 }}>
         <Toolbar />
+        {/* Adiciona um espaço extra no topo se o banner estiver visível */}
+        {isImpersonating && <Toolbar variant="dense" />}
         <Outlet />
       </Box>
     </Box>

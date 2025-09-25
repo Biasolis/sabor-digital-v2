@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -12,13 +12,34 @@ import {
   InputLabel,
 } from '@mui/material';
 
-const UserModal = ({ open, onClose, onSave }) => {
+const UserModal = ({ open, onClose, onSave, user }) => {
+  const isEditing = !!user;
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
-    role: 'garcom', // Valor padrão
+    role: 'garcom',
   });
+
+  useEffect(() => {
+    if (open) {
+      if (isEditing) {
+        setFormData({
+          name: user.name || '',
+          email: user.email || '',
+          role: user.role || 'garcom',
+          password: '', // Senha fica em branco por segurança
+        });
+      } else {
+        setFormData({
+          name: '',
+          email: '',
+          password: '',
+          role: 'garcom',
+        });
+      }
+    }
+  }, [user, open, isEditing]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -29,12 +50,10 @@ const UserModal = ({ open, onClose, onSave }) => {
   };
 
   const handleSave = () => {
-    onSave(formData);
-    // Limpa o formulário após salvar
-    setFormData({ name: '', email: '', password: '', role: 'garcom' });
+    // Inclui o ID se estiver editando
+    onSave({ ...formData, id: user?.id });
   };
 
-  // Funções permitidas conforme o ENUM do banco de dados
   const userRoles = [
     { value: 'garcom', label: 'Garçom' },
     { value: 'caixa', label: 'Caixa' },
@@ -44,7 +63,7 @@ const UserModal = ({ open, onClose, onSave }) => {
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Novo Usuário</DialogTitle>
+      <DialogTitle>{isEditing ? 'Editar Usuário' : 'Novo Usuário'}</DialogTitle>
       <DialogContent>
         <TextField
           autoFocus
@@ -70,12 +89,13 @@ const UserModal = ({ open, onClose, onSave }) => {
         <TextField
           margin="dense"
           name="password"
-          label="Senha Provisória"
+          label="Nova Senha"
           type="password"
           fullWidth
           variant="outlined"
           value={formData.password}
           onChange={handleChange}
+          helperText={isEditing ? 'Deixe em branco para não alterar' : 'Senha provisória'}
         />
         <FormControl fullWidth margin="dense">
           <InputLabel id="role-select-label">Função</InputLabel>

@@ -54,6 +54,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('@SaborDigital:user');
     localStorage.removeItem('@SaborDigital:token');
     localStorage.removeItem('@SaborDigital:tenant');
+    localStorage.removeItem('@SaborDigital:superadmin_token'); // Limpa também o token do superadmin
     
     setUser(null);
     api.defaults.headers.authorization = undefined;
@@ -62,8 +63,44 @@ export const AuthProvider = ({ children }) => {
     toast.info('Você foi desconectado.');
   };
 
+  // NOVA FUNÇÃO para retornar ao modo Super Admin
+  const stopImpersonation = async () => {
+    const superAdminToken = localStorage.getItem('@SaborDigital:superadmin_token');
+    if (!superAdminToken) {
+      toast.error("Nenhuma sessão de Super Admin encontrada para restaurar.");
+      return;
+    }
+
+    // Limpa os dados de acesso temporário
+    localStorage.removeItem('@SaborDigital:user');
+    localStorage.removeItem('@SaborDigital:token');
+    localStorage.removeItem('@SaborDigital:tenant');
+    
+    // Restaura o token original do Super Admin
+    localStorage.setItem('@SaborDigital:token', superAdminToken);
+    localStorage.removeItem('@SaborDigital:superadmin_token');
+
+    // Busca novamente os dados do superadmin e atualiza o estado
+    try {
+        api.defaults.headers.authorization = `Bearer ${superAdminToken}`;
+        const response = await api.get('/superadmin/me');
+        const superAdminUser = { ...response.data, name: 'Super Admin' }; // Adapta o nome para exibição
+        
+        localStorage.setItem('@SaborDigital:user', JSON.stringify(superAdminUser));
+        setUser(superAdminUser);
+
+        toast.success("Sessão de Super Admin restaurada!");
+        navigate('/superadmin/dashboard');
+
+    } catch (error) {
+        toast.error("Falha ao restaurar a sessão. Faça login novamente.");
+        logout(); // Desloga completamente em caso de falha
+    }
+  };
+
+
   return (
-    <AuthContext.Provider value={{ signed: !!user, user, loading, login, logout }}>
+    <AuthContext.Provider value={{ signed: !!user, user, loading, login, logout, stopImpersonation }}>
       {children}
     </AuthContext.Provider>
   );

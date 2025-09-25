@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createUser, listUsers } from '../controllers/userController.js';
+import { createUser, listUsers, updateUser } from '../controllers/userController.js';
 import { protect, isTenantUser, isTenantAdmin } from '../middleware/authMiddleware.js';
 
 const router = Router();
@@ -10,11 +10,11 @@ router.use(protect, isTenantUser);
 // Rota para listar usuários (qualquer usuário do tenant pode ver a equipe)
 router.get('/', listUsers);
 
-// Rota para criar um novo usuário (apenas o admin do tenant pode criar)
+// Apenas o admin do tenant pode criar ou atualizar usuários
 router.post('/', isTenantAdmin, createUser);
+router.put('/:id', isTenantAdmin, updateUser); // NOVA ROTA DE UPDATE
 
-// Adicione aqui futuramente as rotas de Update (PUT) e Delete (DELETE)
-// Ex: router.put('/:id', isTenantAdmin, updateUser);
+// Adicione aqui futuramente a rota de Delete (DELETE)
 // Ex: router.delete('/:id', isTenantAdmin, deleteUser);
 
 export default router;

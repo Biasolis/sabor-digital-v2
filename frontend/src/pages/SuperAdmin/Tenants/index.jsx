@@ -5,7 +5,8 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete'; // 1. Importar ícone de lixeira
+import DeleteIcon from '@mui/icons-material/Delete';
+import LoginIcon from '@mui/icons-material/Login'; // 1. Ícone para o botão de acesso
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import api from '../../../services/api';
@@ -62,7 +63,6 @@ const TenantsPage = () => {
     }
   };
 
-  // 2. NOVA FUNÇÃO para deletar um tenant
   const handleDeleteTenant = async (tenantId) => {
     if (window.confirm('Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.')) {
       try {
@@ -71,6 +71,35 @@ const TenantsPage = () => {
         fetchData();
       } catch (error) {
         toast.error(error.response?.data?.message || 'Erro ao excluir cliente.');
+      }
+    }
+  };
+
+  // 2. NOVA FUNÇÃO para acessar o painel do tenant
+  const handleImpersonate = async (tenant) => {
+    if (window.confirm(`Deseja acessar o painel de "${tenant.name}"? Você será desconectado da sua sessão de Super Admin temporariamente.`)) {
+      try {
+        const { data } = await api.post(`/superadmin/impersonate/${tenant.id}`);
+        
+        // Guarda o token original do Super Admin
+        const superAdminToken = localStorage.getItem('@SaborDigital:token');
+        localStorage.setItem('@SaborDigital:superadmin_token', superAdminToken);
+
+        // Define os novos dados de acesso (do admin do tenant)
+        localStorage.setItem('@SaborDigital:user', JSON.stringify(data.user));
+        localStorage.setItem('@SaborDigital:token', data.token);
+        localStorage.setItem('@SaborDigital:tenant', JSON.stringify(data.tenant));
+
+        // Atualiza o header da API para o novo token
+        api.defaults.headers.authorization = `Bearer ${data.token}`;
+        
+        toast.success(data.message);
+
+        // Abre o dashboard do tenant em uma nova aba
+        window.open(`http://${tenant.subdomain}.localhost:5173/dashboard`, '_blank');
+
+      } catch (error) {
+        toast.error(error.response?.data?.message || 'Não foi possível acessar o painel do cliente.');
       }
     }
   };
@@ -116,12 +145,17 @@ const TenantsPage = () => {
                   <TableCell sx={{textTransform: 'capitalize'}}>{tenant.status}</TableCell>
                   <TableCell>{new Date(tenant.created_at).toLocaleDateString('pt-BR')}</TableCell>
                   <TableCell align="center">
+                    {/* 3. NOVO BOTÃO DE ACESSO */}
+                    <Tooltip title="Acessar Painel">
+                      <IconButton onClick={() => handleImpersonate(tenant)}>
+                        <LoginIcon />
+                      </IconButton>
+                    </Tooltip>
                     <Tooltip title="Editar Cliente">
                       <IconButton onClick={() => handleOpenModal(tenant)}>
                         <EditIcon />
                       </IconButton>
                     </Tooltip>
-                    {/* 3. NOVO BOTÃO de exclusão */}
                     <Tooltip title="Excluir Cliente">
                       <IconButton onClick={() => handleDeleteTenant(tenant.id)}>
                         <DeleteIcon color="error" />

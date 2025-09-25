@@ -16,11 +16,14 @@ const TenantModal = ({ open, onClose, onSave, tenant, plans = [] }) => {
           subdomain: tenant.subdomain || '',
           status: tenant.status || 'active',
           plan_id: tenant.plan_id || '',
+          ticketz_api_url: tenant.ticketz_api_url || '',
+          ticketz_api_token: tenant.ticketz_api_token || '',
         });
       } else {
         setFormData({
           name: '', subdomain: '', plan_id: '', status: 'active',
           admin_name: '', admin_email: '', admin_password: '',
+          ticketz_api_url: '', ticketz_api_token: '',
         });
       }
     }
@@ -64,7 +67,6 @@ const TenantModal = ({ open, onClose, onSave, tenant, plans = [] }) => {
               value={formData.plan_id || ''}
               label="Plano"
               onChange={handleChange}
-              // AQUI ESTAVA A TRAVA "disabled={isEditing}" - FOI REMOVIDA
             >
               {plans.map((plan) => (
                   <MenuItem key={plan.id} value={plan.id}>{plan.name}</MenuItem>
@@ -85,6 +87,25 @@ const TenantModal = ({ open, onClose, onSave, tenant, plans = [] }) => {
               <MenuItem value="suspended">Suspenso</MenuItem>
             </Select>
           </FormControl>
+
+          <Divider sx={{my: 2}}><Typography>Integração Ticket-z</Typography></Divider>
+          <TextField
+            fullWidth
+            margin="normal"
+            name="ticketz_api_url"
+            label="URL da API Ticket-z"
+            value={formData.ticketz_api_url || ''}
+            onChange={handleChange}
+          />
+          <TextField
+            fullWidth
+            margin="normal"
+            name="ticketz_api_token"
+            label="Token da API Ticket-z"
+            type="password"
+            value={formData.ticketz_api_token || ''}
+            onChange={handleChange}
+          />
           
           {!isEditing && (
             <>
