@@ -1,6 +1,6 @@
 -- COMANDOS PARA LIMPEZA (GARANTE QUE O SCRIPT PODE SER EXECUTADO VÁRIAS VEZES)
-DROP TABLE IF EXISTS transactions, cash_sessions, cash_registers, product_inventory_usage, inventory_items, order_items, orders, customers, tables, products, categories, users, tenants, plans, superadmins CASCADE;
-DROP TYPE IF EXISTS user_role, order_status, transaction_type, payment_method;
+DROP TABLE IF EXISTS transactions, cash_sessions, cash_registers, product_inventory_usage, inventory_items, order_items, orders, customers, tables, products, categories, users, invoices, tenants, plans, superadmins CASCADE;
+DROP TYPE IF EXISTS user_role, order_status, transaction_type, payment_method, subscription_status, billing_cycle, invoice_status;
 
 -- Habilita a extensão para gerar UUIDs
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -9,12 +9,20 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE plans (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(100) NOT NULL UNIQUE,
-    price DECIMAL(10, 2) NOT NULL,
+    price_monthly DECIMAL(10, 2) NOT NULL, -- MODIFICADO
+    price_annually DECIMAL(10, 2) NOT NULL, -- NOVO CAMPO
     features JSONB,
     is_public BOOLEAN DEFAULT true,
+    -- IDs de referência do gateway de pagamento
+    gateway_plan_id_monthly VARCHAR(255), -- NOVO CAMPO
+    gateway_plan_id_annually VARCHAR(255), -- NOVO CAMPO
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Tipos ENUM para Faturamento
+CREATE TYPE subscription_status AS ENUM ('active', 'past_due', 'canceled', 'pending');
+CREATE TYPE billing_cycle AS ENUM ('monthly', 'annually');
 
 -- Tabela para os tenants (restaurantes)
 CREATE TABLE tenants (
@@ -27,13 +35,38 @@ CREATE TABLE tenants (
     primary_color VARCHAR(7),
     secondary_color VARCHAR(7),
     is_open BOOLEAN NOT NULL DEFAULT true,
-    -- NOVOS CAMPOS PARA INTEGRAÇÃO TICKET-Z
     ticketz_api_url VARCHAR(255),
-    ticketz_api_token TEXT, -- Usando TEXT para tokens longos
+    ticketz_api_token TEXT,
+    -- NOVOS CAMPOS DE FATURAMENTO
+    gateway_subscription_id VARCHAR(255),
+    subscription_status subscription_status DEFAULT 'pending',
+    billing_cycle billing_cycle,
+    next_billing_date DATE,
+    trial_ends_at DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_plan FOREIGN KEY(plan_id) REFERENCES plans(id)
 );
+
+-- NOVO TIPO ENUM para status da fatura
+CREATE TYPE invoice_status AS ENUM ('pending', 'paid', 'failed', 'refunded');
+
+-- NOVA TABELA: Faturas (Invoices)
+CREATE TABLE invoices (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL,
+    plan_id UUID NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    status invoice_status NOT NULL DEFAULT 'pending',
+    due_date DATE NOT NULL,
+    paid_at TIMESTAMP WITH TIME ZONE,
+    gateway_payment_id VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_tenant FOREIGN KEY(tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    CONSTRAINT fk_plan FOREIGN KEY(plan_id) REFERENCES plans(id)
+);
+
 
 -- Tipo ENUM para papéis de usuários
 CREATE TYPE user_role AS ENUM ('admin', 'caixa', 'cozinha', 'garcom', 'auxiliar');
@@ -46,7 +79,7 @@ CREATE TABLE users (
     email VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     role user_role NOT NULL,
-    is_system_user BOOLEAN DEFAULT false, -- NOVO CAMPO
+    is_system_user BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_tenant FOREIGN KEY(tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
@@ -234,4 +267,4 @@ CREATE TABLE transactions (
 );
 
 -- Inserções de exemplo (opcional, para teste)
-INSERT INTO plans (name, price, features) VALUES ('Plano Básico', 49.90, '{"users": 5, "menu": true}');
+INSERT INTO plans (name, price_monthly, price_annually) VALUES ('Plano Básico', 49.90, 499.90);

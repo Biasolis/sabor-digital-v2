@@ -43,7 +43,10 @@ const SettingsPage = () => {
           ticketz_api_url: data.ticketz_api_url || '',
           ticketz_api_token: data.ticketz_api_token || '',
         });
-        setLogoPreview(data.logo_url);
+        // Apenas define a URL da imagem vinda da API
+        if (data.logo_url) {
+          setLogoPreview(data.logo_url);
+        }
       })
       .catch(() => {
         toast.error('Erro ao carregar configurações.');
@@ -64,6 +67,7 @@ const SettingsPage = () => {
     const file = e.target.files[0];
     if (file) {
       setLogoFile(file);
+      // CORREÇÃO: URL.createObjectURL é usado APENAS com o novo arquivo selecionado
       setLogoPreview(URL.createObjectURL(file));
     }
   };

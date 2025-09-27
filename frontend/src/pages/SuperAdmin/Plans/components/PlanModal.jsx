@@ -8,7 +8,8 @@ const PlanModal = ({ open, onClose, onSave, plan }) => {
   const isEditing = !!plan;
   const [formData, setFormData] = useState({
     name: '',
-    price: '',
+    price_monthly: '',
+    price_annually: '',
     is_public: true,
     features: {
       maxUsers: 5,
@@ -21,19 +22,19 @@ const PlanModal = ({ open, onClose, onSave, plan }) => {
       if (isEditing && plan) {
         setFormData({
           name: plan.name || '',
-          price: plan.price || '',
+          price_monthly: plan.price_monthly || '',
+          price_annually: plan.price_annually || '',
           is_public: plan.is_public !== undefined ? plan.is_public : true,
-          // Garante que o objeto 'features' e suas chaves existam
           features: {
             maxUsers: plan.features?.maxUsers || 5,
             enableReports: plan.features?.enableReports || false,
           }
         });
       } else {
-        // Reseta para os valores padrão de um novo plano
         setFormData({
           name: '',
-          price: '',
+          price_monthly: '',
+          price_annually: '',
           is_public: true,
           features: {
             maxUsers: 5,
@@ -64,7 +65,6 @@ const PlanModal = ({ open, onClose, onSave, plan }) => {
   };
 
   const handleSave = () => {
-    // A API já espera receber o objeto 'features'
     onSave({ ...formData, id: plan?.id });
   };
 
@@ -84,14 +84,25 @@ const PlanModal = ({ open, onClose, onSave, plan }) => {
               onChange={handleChange}
             />
           </Grid>
-          <Grid item xs={12}>
+          <Grid item xs={12} sm={6}>
             <TextField
-              name="price"
+              name="price_monthly"
               label="Preço Mensal (ex: 49.90)"
               type="number"
               fullWidth
               variant="outlined"
-              value={formData.price}
+              value={formData.price_monthly}
+              onChange={handleChange}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              name="price_annually"
+              label="Preço Anual (ex: 499.90)"
+              type="number"
+              fullWidth
+              variant="outlined"
+              value={formData.price_annually}
               onChange={handleChange}
             />
           </Grid>

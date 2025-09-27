@@ -9,7 +9,8 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 import LogoutIcon from '@mui/icons-material/Logout';
-import AssessmentIcon from '@mui/icons-material/Assessment'; // Ícone de relatórios
+import AssessmentIcon from '@mui/icons-material/Assessment';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle'; // Ícone para o perfil
 
 const drawerWidth = 240;
 
@@ -22,7 +23,8 @@ const SuperAdminLayout = () => {
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/superadmin/dashboard' },
     { text: 'Clientes', icon: <PeopleIcon />, path: '/superadmin/tenants' },
     { text: 'Planos', icon: <MonetizationOnIcon />, path: '/superadmin/plans' },
-    { text: 'Relatórios', icon: <AssessmentIcon />, path: '/superadmin/reports' }, // Novo item de menu
+    { text: 'Relatórios', icon: <AssessmentIcon />, path: '/superadmin/reports' },
+    { text: 'Meu Perfil', icon: <AccountCircleIcon />, path: '/superadmin/profile' }, // NOVO ITEM
   ];
 
   const drawer = (

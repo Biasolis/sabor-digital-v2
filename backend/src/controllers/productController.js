@@ -1,38 +1,69 @@
 import db from '../database/db.js';
 import { uploadFile } from '../lib/s3.js';
 
-// Criar um novo produto
+// MODIFICADO: Criar um novo produto com controle de estoque opcional
 export const createProduct = async (req, res) => {
-  // Adicionado 'barcode'
-  const { name, description, price, category_id, barcode } = req.body;
+  const { 
+    name, description, price, category_id, barcode,
+    control_stock, quantity_on_hand, unit_of_measure 
+  } = req.body;
   const tenantId = req.user.tenant_id;
 
   if (!name || !price || !category_id) {
     return res.status(400).json({ message: 'Nome, preço e categoria são obrigatórios.' });
   }
 
+  const client = await db.pool.connect();
   try {
-    const categoryCheck = await db.query(
-      'SELECT id FROM categories WHERE id = $1 AND tenant_id = $2',
-      [category_id, tenantId]
-    );
-    if (categoryCheck.rows.length === 0) {
-      return res.status(403).json({ message: 'Categoria inválida ou não pertence à sua loja.' });
-    }
+    await client.query('BEGIN');
 
-    const query = `
+    // 1. Cria o produto na tabela de produtos
+    const productQuery = `
       INSERT INTO products (tenant_id, category_id, name, description, price, barcode)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *;
     `;
-    // Adicionado 'barcode' aos parâmetros
-    const result = await db.query(query, [tenantId, category_id, name, description, price, barcode]);
-    res.status(201).json(result.rows[0]);
+    const productResult = await client.query(productQuery, [tenantId, category_id, name, description, price, barcode]);
+    const newProduct = productResult.rows[0];
+
+    // 2. Se o controle de estoque estiver ativado, cria o item e a "receita"
+    if (control_stock) {
+      if (!unit_of_measure) {
+        throw new Error("Unidade de medida é obrigatória para controlar o estoque.");
+      }
+      // 2a. Cria o item correspondente no estoque
+      const inventoryQuery = `
+        INSERT INTO inventory_items (tenant_id, name, quantity_on_hand, unit_of_measure)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id;
+      `;
+      const inventoryResult = await client.query(inventoryQuery, [tenantId, name, quantity_on_hand || 0, unit_of_measure]);
+      const newInventoryItemId = inventoryResult.rows[0].id;
+
+      // 2b. Vincula o produto ao item de estoque (receita de um item só)
+      const recipeQuery = `
+        INSERT INTO product_inventory_usage (product_id, inventory_item_id, quantity_consumed)
+        VALUES ($1, $2, 1);
+      `;
+      await client.query(recipeQuery, [newProduct.id, newInventoryItemId]);
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json(newProduct);
+
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Erro ao criar produto:', error);
-    res.status(500).json({ message: 'Erro interno do servidor.' });
+    // Trata erro de item de estoque com nome duplicado
+    if (error.code === '23505' && error.table === 'inventory_items') {
+      return res.status(409).json({ message: 'Já existe um item de estoque com este nome. Escolha outro nome para o produto.' });
+    }
+    res.status(500).json({ message: error.message || 'Erro interno do servidor.' });
+  } finally {
+    client.release();
   }
 };
+
 
 // Listar produtos
 export const listProducts = async (req, res) => {
@@ -42,7 +73,7 @@ export const listProducts = async (req, res) => {
   try {
     // Adicionado p.barcode à seleção
     let queryText = `
-      SELECT p.id, p.name, p.description, p.price, p.is_available, p.image_url, p.barcode, c.name as category_name
+      SELECT p.id, p.name, p.description, p.price, p.is_available, p.image_url, p.barcode, c.name as category_name, c.id as category_id
       FROM products p
       JOIN categories c ON p.category_id = c.id
       WHERE p.tenant_id = $1

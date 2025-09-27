@@ -99,8 +99,9 @@ const PlansPage = () => {
               <TableRow>
                 <TableCell>Nome do Plano</TableCell>
                 <TableCell align="right">Preço Mensal</TableCell>
-                <TableCell align="center">Max. Usuários</TableCell> {/* NOVA COLUNA */}
-                <TableCell align="center">Relatórios</TableCell> {/* NOVA COLUNA */}
+                <TableCell align="right">Preço Anual</TableCell>
+                <TableCell align="center">Max. Usuários</TableCell>
+                <TableCell align="center">Relatórios</TableCell>
                 <TableCell>Público</TableCell>
                 <TableCell align="center">Ações</TableCell>
               </TableRow>
@@ -109,8 +110,8 @@ const PlansPage = () => {
               {plans.map((plan) => (
                 <TableRow hover key={plan.id}>
                   <TableCell>{plan.name}</TableCell>
-                  <TableCell align="right">{formatCurrency(plan.price)}</TableCell>
-                  {/* NOVAS CÉLULAS */}
+                  <TableCell align="right">{formatCurrency(plan.price_monthly)}</TableCell>
+                  <TableCell align="right">{formatCurrency(plan.price_annually)}</TableCell>
                   <TableCell align="center">{plan.features?.maxUsers || 'N/A'}</TableCell>
                   <TableCell align="center">{plan.features?.enableReports ? 'Sim' : 'Não'}</TableCell>
                   <TableCell>{plan.is_public ? 'Sim' : 'Não'}</TableCell>
